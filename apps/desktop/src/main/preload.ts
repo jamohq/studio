@@ -27,6 +27,9 @@ const api = {
   createDirectory: (wsId: string, path: string) =>
     ipcRenderer.invoke('jamo:create-directory', wsId, path),
 
+  deleteFile: (wsId: string, path: string) =>
+    ipcRenderer.invoke('jamo:delete-file', wsId, path),
+
   createTerminal: (wsId: string, cols: number, rows: number) =>
     ipcRenderer.invoke('jamo:create-terminal', wsId, cols, rows),
 

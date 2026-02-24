@@ -3,7 +3,6 @@
 export interface CanvasDocument {
   version: number;
   id: string;
-  name: string;
   createdAt: string;
   updatedAt: string;
   /** Raw Excalidraw elements array */
@@ -17,10 +16,4 @@ export interface CanvasAppState {
   viewBackgroundColor?: string;
   gridSize?: number | null;
   zenModeEnabled?: boolean;
-}
-
-export interface CanvasDocumentIndex {
-  id: string;
-  name: string;
-  path: string; // filename like doc-{uuid}.json
 }

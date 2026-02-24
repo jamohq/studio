@@ -78,6 +78,7 @@ export const IPC = {
   LIST_DIRECTORY: 'jamo:list-directory',
   MOVE_FILE: 'jamo:move-file',
   CREATE_DIRECTORY: 'jamo:create-directory',
+  DELETE_FILE: 'jamo:delete-file',
 } as const;
 
 // Window API exposed via preload
@@ -92,6 +93,7 @@ export interface JamoAPI {
   listDirectory(wsId: string, path: string): Promise<ListDirectoryResponse>;
   moveFile(wsId: string, oldPath: string, newPath: string): Promise<void>;
   createDirectory(wsId: string, path: string): Promise<void>;
+  deleteFile(wsId: string, path: string): Promise<void>;
   createTerminal(wsId: string, cols: number, rows: number): Promise<string>;
   startTerminalStream(sessionId: string): void;
   sendTerminalInput(sessionId: string, data: string): void;

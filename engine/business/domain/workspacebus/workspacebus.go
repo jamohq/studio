@@ -219,3 +219,19 @@ func (b *Business) CreateDirectory(ctx context.Context, wsID, relPath string) er
 
 	return nil
 }
+
+// DeleteFile removes a file or directory within the workspace.
+func (b *Business) DeleteFile(ctx context.Context, wsID, relPath string) error {
+	absPath, err := b.ResolvePath(wsID, relPath)
+	if err != nil {
+		return err
+	}
+
+	if err := os.RemoveAll(absPath); err != nil {
+		return errs.Newf(codes.Internal, "failed to delete: %s", err)
+	}
+
+	b.log.Info(ctx, "file deleted", "workspace", wsID, "path", relPath)
+
+	return nil
+}

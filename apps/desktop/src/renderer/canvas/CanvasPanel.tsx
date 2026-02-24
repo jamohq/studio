@@ -9,14 +9,19 @@ const AUTOSAVE_DELAY_MS = 2000;
 const BG_DARK = '#0d0d1a';
 const BG_LIGHT = '#ffffff';
 
-interface CanvasPanelProps {
-  workspaceId: string;
-  filePath: string; // relative path like .jamo/creator/doc-xxx.json
-  onClose: () => void;
-  onRenamed?: (filePath: string, newName: string) => void;
+/** Derive display name from file path: ".jamo/creator/My Drawing.json" → "My Drawing" */
+function displayName(filePath: string): string {
+  return (filePath.split('/').pop() || '').replace(/\.json$/, '');
 }
 
-export default function CanvasPanel({ workspaceId, filePath, onClose, onRenamed }: CanvasPanelProps) {
+interface CanvasPanelProps {
+  workspaceId: string;
+  filePath: string;
+  onClose: () => void;
+  onFileRenamed?: (oldPath: string, newPath: string) => void;
+}
+
+export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRenamed }: CanvasPanelProps) {
   const { theme, tokens } = useTheme();
   const [doc, setDoc] = useState<CanvasDocument | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,10 +40,10 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onRenamed 
       try {
         const res = await window.jamo.readFile(workspaceId, filePath);
         const parsed = JSON.parse(res.content);
-        // Migrate old multi-page documents
+        // Migrate old documents that had pages
         if (parsed.pages && !parsed.elements) {
           parsed.elements = [];
-          parsed.appState = { viewBackgroundColor: '#0d0d1a' };
+          parsed.appState = {};
           delete parsed.pages;
           delete parsed.activePageIndex;
         }
@@ -66,7 +71,7 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onRenamed 
     saveTimerRef.current = setTimeout(() => saveDocument(), AUTOSAVE_DELAY_MS);
   }, [saveDocument]);
 
-  // Intercept Cmd+S to save to our file instead of Excalidraw's native save dialog
+  // Intercept Cmd+S
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -75,7 +80,6 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onRenamed 
         saveDocument();
       }
     };
-    // Use capture phase to intercept before Excalidraw sees it
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   }, [saveDocument]);
@@ -105,25 +109,35 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onRenamed 
     exportToClipboard(doc);
   }, [doc]);
 
-  // Rename support
+  // Rename = rename the actual file
   const startRename = useCallback(() => {
-    if (!doc) return;
-    setEditName(doc.name);
+    setEditName(displayName(filePath));
     setEditing(true);
-  }, [doc]);
+  }, [filePath]);
 
-  const commitRename = useCallback(() => {
+  const commitRename = useCallback(async () => {
     const trimmed = editName.trim();
-    if (!trimmed || !doc) {
+    if (!trimmed || trimmed === displayName(filePath)) {
       setEditing(false);
       return;
     }
-    setDoc((prev) => prev ? { ...prev, name: trimmed } : prev);
-    setEditing(false);
-    // Save immediately with new name
-    setTimeout(() => saveDocument(), 0);
-    onRenamed?.(filePath, trimmed);
-  }, [editName, doc, saveDocument, filePath, onRenamed]);
+    try {
+      // Save current state first
+      await saveDocument();
+      // Move file to new name
+      const parentDir = filePath.substring(0, filePath.lastIndexOf('/'));
+      const newPath = `${parentDir}/${trimmed}.json`;
+      await window.jamo.moveFile(workspaceId, filePath, newPath);
+      setEditing(false);
+      onFileRenamed?.(filePath, newPath);
+    } catch (err: any) {
+      console.error('Failed to rename:', err);
+      alert('Failed to rename: ' + (err?.message || err));
+      setEditing(false);
+    }
+  }, [editName, filePath, workspaceId, saveDocument, onFileRenamed]);
+
+  const name = displayName(filePath);
 
   if (loading) {
     return (
@@ -179,7 +193,7 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onRenamed 
             onDoubleClick={startRename}
             title="Double-click to rename"
           >
-            {doc.name}
+            {name}
           </span>
         )}
         {saved && <span style={{ fontSize: 10, color: tokens.success }}>Saved</span>}

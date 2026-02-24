@@ -11,6 +11,7 @@ service WorkspaceService {
   rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
   rpc MoveFile(MoveFileRequest) returns (MoveFileResponse);
   rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
 }
 
 message OpenWorkspaceRequest {
@@ -68,3 +69,10 @@ message CreateDirectoryRequest {
 }
 
 message CreateDirectoryResponse {}
+
+message DeleteFileRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+}
+
+message DeleteFileResponse {}

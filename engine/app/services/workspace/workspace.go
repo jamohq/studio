@@ -112,3 +112,13 @@ func (a *App) CreateDirectory(ctx context.Context, req *jamov1.CreateDirectoryRe
 
 	return &jamov1.CreateDirectoryResponse{}, nil
 }
+
+// DeleteFile removes a file or directory within the workspace.
+func (a *App) DeleteFile(ctx context.Context, req *jamov1.DeleteFileRequest) (*jamov1.DeleteFileResponse, error) {
+	err := a.bus.DeleteFile(ctx, req.GetWorkspaceId(), req.GetRelativePath())
+	if err != nil {
+		return nil, errs.ToGRPCError(err)
+	}
+
+	return &jamov1.DeleteFileResponse{}, nil
+}

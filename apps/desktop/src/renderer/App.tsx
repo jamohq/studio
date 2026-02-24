@@ -76,9 +76,17 @@ export default function App() {
     setCreatorRefreshKey((k) => k + 1);
   }, []);
 
-  const handleRenamed = useCallback(() => {
+  const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
+    setOpenFile(newPath);
     setCreatorRefreshKey((k) => k + 1);
   }, []);
+
+  const handleFileDeleted = useCallback((relPath: string) => {
+    if (openFile === relPath || openFile?.startsWith(relPath + '/')) {
+      setOpenFile(null);
+    }
+    setCreatorRefreshKey((k) => k + 1);
+  }, [openFile]);
 
   const handleToggleTerminal = useCallback(() => {
     setTerminalOpen((prev) => !prev);
@@ -110,7 +118,7 @@ export default function App() {
         {activePanel && (
           <div style={{ width: 240, borderRight: `1px solid ${tokens.border}`, overflow: 'hidden', flexShrink: 0 }}>
             {activePanel === 'explorer' && <ExplorerPanel workspaceId={workspaceId} />}
-            {activePanel === 'creator' && <CreatorPanel workspaceId={workspaceId} activeFile={openFile} onOpenFile={handleOpenCreatorFile} refreshKey={creatorRefreshKey} />}
+            {activePanel === 'creator' && <CreatorPanel workspaceId={workspaceId} activeFile={openFile} onOpenFile={handleOpenCreatorFile} onFileDeleted={handleFileDeleted} refreshKey={creatorRefreshKey} />}
           </div>
         )}
 
@@ -158,7 +166,7 @@ export default function App() {
             {/* Editor */}
             <div style={{ flex: 1, overflow: 'hidden' }}>
               {openFile ? (
-                <CanvasPanel workspaceId={workspaceId} filePath={openFile} onClose={handleCloseFile} onRenamed={handleRenamed} />
+                <CanvasPanel workspaceId={workspaceId} filePath={openFile} onClose={handleCloseFile} onFileRenamed={handleFileRenamed} />
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: tokens.textDim, fontSize: 13 }}>
                   Select a file from the sidebar to get started

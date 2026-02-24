@@ -98,17 +98,36 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
   });
 
   ipcMain.handle(IPC.MOVE_FILE, async (_event, wsId: string, oldPath: string, newPath: string) => {
+    console.log('[IPC] moveFile called:', oldPath, '->', newPath);
     return new Promise((resolve, reject) => {
       clients.workspace.moveFile({ workspaceId: wsId, oldPath, newPath }, (err: any) => {
-        if (err) return reject(err);
+        if (err) {
+          console.error('[IPC] moveFile FAILED:', err.message || err);
+          return reject(err);
+        }
+        console.log('[IPC] moveFile OK');
         resolve(undefined);
       });
     });
   });
 
   ipcMain.handle(IPC.CREATE_DIRECTORY, async (_event, wsId: string, relativePath: string) => {
+    console.log('[IPC] createDirectory called:', wsId, relativePath);
     return new Promise((resolve, reject) => {
-      clients.workspace.createDirectory({ workspaceId: wsId, relativePath }, (err: any) => {
+      clients.workspace.createDirectory({ workspaceId: wsId, relativePath }, (err: any, res: any) => {
+        if (err) {
+          console.error('[IPC] createDirectory FAILED:', relativePath, err.message || err);
+          return reject(err);
+        }
+        console.log('[IPC] createDirectory OK:', relativePath);
+        resolve(undefined);
+      });
+    });
+  });
+
+  ipcMain.handle(IPC.DELETE_FILE, async (_event, wsId: string, relativePath: string) => {
+    return new Promise((resolve, reject) => {
+      clients.workspace.deleteFile({ workspaceId: wsId, relativePath }, (err: any) => {
         if (err) return reject(err);
         resolve(undefined);
       });

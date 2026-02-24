@@ -15,7 +15,6 @@ interface ExportElement {
 interface ExportData {
   document: {
     id: string;
-    name: string;
     elements: ExportElement[];
   };
 }
@@ -50,7 +49,7 @@ export function exportForAI(doc: CanvasDocument): ExportData {
     .map(exportElement);
 
   return {
-    document: { id: doc.id, name: doc.name, elements },
+    document: { id: doc.id, elements },
   };
 }
 
