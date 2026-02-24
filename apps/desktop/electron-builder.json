@@ -1,0 +1,24 @@
+{
+  "appId": "com.jamo.studio",
+  "productName": "Jamo Studio",
+  "directories": {
+    "output": "out"
+  },
+  "files": [
+    "dist/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "../../proto",
+      "to": "proto",
+      "filter": ["**/*.proto"]
+    }
+  ],
+  "mac": {
+    "target": "dmg"
+  },
+  "linux": {
+    "target": "AppImage"
+  }
+}

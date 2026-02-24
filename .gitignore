@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Go
+engine/jamo-engine
+engine/proto/jamo/v1/*.pb.go
+
+# Electron
+apps/desktop/out/
+
+# Workspace data
+.jamo/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local

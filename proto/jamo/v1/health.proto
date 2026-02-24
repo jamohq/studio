@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package jamo.v1;
+
+option go_package = "github.com/jamojamo/studio/engine/proto/jamo/v1;jamov1";
+
+service HealthService {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string status = 1;
+  string version = 2;
+}

@@ -1,0 +1,14 @@
+{
+  "name": "jamo-studio",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter jamo-desktop dev"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "protobufjs"
+    ]
+  }
+}

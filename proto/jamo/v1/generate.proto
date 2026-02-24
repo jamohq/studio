@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package jamo.v1;
+
+option go_package = "github.com/jamojamo/studio/engine/proto/jamo/v1;jamov1";
+
+service GenerateService {
+  rpc Generate(GenerateRequest) returns (GenerateResponse);
+  rpc ApplyPatches(ApplyPatchesRequest) returns (ApplyPatchesResponse);
+}
+
+message GenerateRequest {
+  string workspace_id = 1;
+  string prompt = 2;
+}
+
+message Patch {
+  string file_path = 1;
+  bytes content = 2;
+}
+
+message GenerateResponse {
+  string task_id = 1;
+  repeated Patch patches = 2;
+}
+
+message ApplyPatchesRequest {
+  string workspace_id = 1;
+  string task_id = 2;
+  repeated Patch patches = 3;
+}
+
+message PatchResult {
+  string file_path = 1;
+  bool applied = 2;
+  string error = 3;
+}
+
+message ApplyPatchesResponse {
+  repeated PatchResult results = 1;
+}

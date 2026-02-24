@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package jamo.v1;
+
+option go_package = "github.com/jamojamo/studio/engine/proto/jamo/v1;jamov1";
+
+service EventService {
+  rpc StreamEvents(StreamEventsRequest) returns (stream Event);
+}
+
+message StreamEventsRequest {
+  string workspace_id = 1;
+}
+
+message Event {
+  string id = 1;
+  string type = 2;
+  bytes payload = 3;
+  int64 timestamp_ms = 4;
+}

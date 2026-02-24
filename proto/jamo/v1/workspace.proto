@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package jamo.v1;
+
+option go_package = "github.com/jamojamo/studio/engine/proto/jamo/v1;jamov1";
+
+service WorkspaceService {
+  rpc OpenWorkspace(OpenWorkspaceRequest) returns (OpenWorkspaceResponse);
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse);
+  rpc MoveFile(MoveFileRequest) returns (MoveFileResponse);
+  rpc CreateDirectory(CreateDirectoryRequest) returns (CreateDirectoryResponse);
+}
+
+message OpenWorkspaceRequest {
+  string path = 1;
+}
+
+message OpenWorkspaceResponse {
+  string workspace_id = 1;
+  string path = 2;
+}
+
+message ReadFileRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+}
+
+message ReadFileResponse {
+  bytes content = 1;
+}
+
+message WriteFileRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+  bytes content = 3;
+}
+
+message WriteFileResponse {}
+
+message ListDirectoryRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+}
+
+message ListDirectoryResponse {
+  repeated FileEntry entries = 1;
+}
+
+message FileEntry {
+  string name = 1;
+  bool is_dir = 2;
+  int64 size = 3;
+}
+
+message MoveFileRequest {
+  string workspace_id = 1;
+  string old_path = 2;
+  string new_path = 3;
+}
+
+message MoveFileResponse {}
+
+message CreateDirectoryRequest {
+  string workspace_id = 1;
+  string relative_path = 2;
+}
+
+message CreateDirectoryResponse {}

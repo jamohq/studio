@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package jamo.v1;
+
+option go_package = "github.com/jamojamo/studio/engine/proto/jamo/v1;jamov1";
+
+service TerminalService {
+  rpc CreateTerminal(CreateTerminalRequest) returns (CreateTerminalResponse);
+  rpc TerminalStream(stream TerminalInput) returns (stream TerminalOutput);
+}
+
+message CreateTerminalRequest {
+  string workspace_id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+message CreateTerminalResponse {
+  string session_id = 1;
+}
+
+message TerminalInput {
+  string session_id = 1;
+  oneof payload {
+    bytes data = 2;
+    TerminalResize resize = 3;
+  }
+}
+
+message TerminalResize {
+  uint32 cols = 1;
+  uint32 rows = 2;
+}
+
+message TerminalOutput {
+  string session_id = 1;
+  bytes data = 2;
+}
