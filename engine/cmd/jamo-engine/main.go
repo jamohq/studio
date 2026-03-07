@@ -93,8 +93,9 @@ func run(ctx context.Context, log *logger.Logger) error {
 	})
 
 	terminal.Register(srv, terminal.Config{
-		Log:         log,
-		TerminalBus: termBus,
+		Log:          log,
+		TerminalBus:  termBus,
+		WorkspaceBus: wsBus,
 	})
 
 	// Event service (returns the app so we can use its Send method).

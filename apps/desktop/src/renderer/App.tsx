@@ -10,6 +10,7 @@ import TerminalPanel from './components/TerminalPanel';
 import ActionsPanel from './components/ActionsPanel';
 import ChangesPanel from './components/ChangesPanel';
 import { useSyncStatus } from './hooks/useSyncStatus';
+import { createPortfolioScaffold } from './scaffold';
 import { findSection } from './sections';
 import { Button } from './components/ui/button';
 import { cn } from '@/lib/utils';
@@ -89,6 +90,31 @@ export default function App() {
       setActivePanel('explorer');
     } catch (err: any) {
       console.error('Failed to open workspace:', err);
+    }
+  }, []);
+
+  const createProject = useCallback(async (parentPath: string, name: string) => {
+    try {
+      const projectPath = await window.jamo.createProjectDirectory(parentPath, name);
+      const res = await window.jamo.openWorkspace(projectPath);
+      setWorkspaceId(res.workspaceId);
+      setRecentWorkspaces(saveRecentWorkspace(res.path));
+      setOpenFile(null);
+      setActivePanel('creator');
+
+      // Scaffold sample creator files.
+      const files = createPortfolioScaffold();
+      for (const file of files) {
+        await window.jamo.writeFile(res.workspaceId, file.path, JSON.stringify(file.content, null, 2));
+      }
+
+      // Init git with the scaffolded files.
+      await window.jamo.gitInit(res.workspaceId);
+      await window.jamo.gitCommit(res.workspaceId, 'Initial project scaffold');
+
+      setCreatorRefreshKey((k) => k + 1);
+    } catch (err: any) {
+      console.error('Failed to create project:', err);
     }
   }, []);
 
@@ -176,6 +202,7 @@ export default function App() {
         <div className="flex h-screen bg-background text-foreground">
           <WelcomePage
             onOpenFolder={() => openWorkspace()}
+            onCreateProject={createProject}
             recentWorkspaces={recentWorkspaces}
             onOpenRecent={(path) => openWorkspace(path)}
           />

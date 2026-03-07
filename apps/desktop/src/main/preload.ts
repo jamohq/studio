@@ -54,6 +54,9 @@ const api = {
     return () => ipcRenderer.removeListener('jamo:terminal-end', handler);
   },
 
+  createProjectDirectory: (parentPath: string, name: string) =>
+    ipcRenderer.invoke('jamo:create-project-dir', parentPath, name),
+
   gitInit: (wsId: string) =>
     ipcRenderer.invoke('jamo:git-init', wsId),
 

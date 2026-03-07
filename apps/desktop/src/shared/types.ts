@@ -114,6 +114,7 @@ export const IPC = {
   GIT_DIFF: 'jamo:git-diff',
   GIT_COMMIT: 'jamo:git-commit',
   GIT_LOG: 'jamo:git-log',
+  CREATE_PROJECT_DIR: 'jamo:create-project-dir',
 } as const;
 
 // Window API exposed via preload
@@ -139,6 +140,7 @@ export interface JamoAPI {
   applyPatches(wsId: string, taskId: string, patches: Patch[]): Promise<ApplyPatchesResponse>;
   subscribeEvents(wsId: string): void;
   onEvent(cb: (event: JamoEvent) => void): () => void;
+  createProjectDirectory(parentPath: string, name: string): Promise<string>;
   gitInit(wsId: string): Promise<{ alreadyInitialized: boolean }>;
   gitStatus(wsId: string): Promise<GitStatusResponse>;
   gitDiff(wsId: string, filePath?: string): Promise<GitDiffResponse>;

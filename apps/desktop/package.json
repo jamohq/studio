@@ -1,5 +1,6 @@
 {
   "name": "jamo-desktop",
+  "productName": "Jamo Studio",
   "version": "0.1.0",
   "private": true,
   "main": "dist/main/index.js",

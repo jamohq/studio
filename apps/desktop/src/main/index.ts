@@ -1,13 +1,119 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu, shell, dialog } from 'electron';
 import * as path from 'path';
 import { startEngine, EngineHandle } from './engine';
 import { createClients } from './grpc-client';
 import { registerIpcHandlers } from './ipc-handlers';
 
+app.name = 'Jamo Studio';
+
+function buildAppMenu() {
+  const isMac = process.platform === 'darwin';
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              { role: 'services' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              { role: 'quit' as const },
+            ],
+          },
+        ]
+      : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Open Workspace…',
+          accelerator: 'CmdOrCtrl+O',
+          click: async () => {
+            const result = await dialog.showOpenDialog({
+              properties: ['openDirectory'],
+              title: 'Open Workspace',
+            });
+            if (!result.canceled && result.filePaths.length > 0) {
+              const win = BrowserWindow.getFocusedWindow();
+              if (win) {
+                win.webContents.send('open-workspace', result.filePaths[0]);
+              }
+            }
+          },
+        },
+        {
+          label: 'New Window',
+          accelerator: 'CmdOrCtrl+Shift+N',
+          click: () => createWindow(),
+        },
+        { type: 'separator' },
+        isMac ? { role: 'close' as const } : { role: 'quit' as const },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac
+          ? [
+              { type: 'separator' as const },
+              { role: 'front' as const },
+            ]
+          : [{ role: 'close' as const }]),
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Jamo Documentation',
+          click: () => shell.openExternal('https://jamo.com/docs'),
+        },
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 let engine: EngineHandle | null = null;
 
 async function createWindow() {
   const mainWindow = new BrowserWindow({
+    title: 'Jamo Studio',
     width: 1200,
     height: 800,
     webPreferences: {
@@ -63,7 +169,10 @@ async function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow).catch((err) => {
+app.whenReady().then(() => {
+  buildAppMenu();
+  return createWindow();
+}).catch((err) => {
   console.error('Failed to start:', err);
 });
 

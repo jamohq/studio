@@ -16,6 +16,12 @@ export function useSyncStatus(workspaceId: string | null) {
   const loadStatus = useCallback(async () => {
     if (!workspaceId) return;
     try {
+      // Check if .jamo/ directory exists first to avoid noisy gRPC errors.
+      const dir = await window.jamo.listDirectory(workspaceId, '.jamo').catch(() => null);
+      if (!dir || !dir.entries.some((e) => e.name === 'sync-status.json')) {
+        setStatus(DEFAULT_STATUS);
+        return;
+      }
       const res = await window.jamo.readFile(workspaceId, SYNC_FILE);
       const parsed = JSON.parse(res.content);
       setStatus(parsed);

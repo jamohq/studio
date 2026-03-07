@@ -7,6 +7,7 @@ import (
 
 	"github.com/jamojamo/studio/engine/app/sdk/errs"
 	"github.com/jamojamo/studio/engine/business/domain/terminalbus"
+	"github.com/jamojamo/studio/engine/business/domain/workspacebus"
 	"github.com/jamojamo/studio/engine/foundation/logger"
 	jamov1 "github.com/jamojamo/studio/engine/proto/jamo/v1"
 	"google.golang.org/grpc"
@@ -16,8 +17,9 @@ import (
 
 // Config holds dependencies for the terminal service.
 type Config struct {
-	Log         *logger.Logger
-	TerminalBus *terminalbus.Business
+	Log          *logger.Logger
+	TerminalBus  *terminalbus.Business
+	WorkspaceBus *workspacebus.Business
 }
 
 // App implements the TerminalService gRPC server.
@@ -25,6 +27,7 @@ type App struct {
 	jamov1.UnimplementedTerminalServiceServer
 	log *logger.Logger
 	bus *terminalbus.Business
+	ws  *workspacebus.Business
 }
 
 // NewApp creates a new terminal service handler.
@@ -32,6 +35,7 @@ func NewApp(cfg Config) *App {
 	return &App{
 		log: cfg.Log,
 		bus: cfg.TerminalBus,
+		ws:  cfg.WorkspaceBus,
 	}
 }
 
@@ -53,7 +57,13 @@ func (a *App) CreateTerminal(ctx context.Context, req *jamov1.CreateTerminalRequ
 		rows = 24
 	}
 
-	id, err := a.bus.Create(ctx, shell, cols, rows)
+	// Resolve workspace path for terminal working directory.
+	var workdir string
+	if ws, err := a.ws.Get(req.GetWorkspaceId()); err == nil {
+		workdir = ws.Path
+	}
+
+	id, err := a.bus.Create(ctx, shell, cols, rows, workdir)
 	if err != nil {
 		return nil, errs.ToGRPCError(err)
 	}

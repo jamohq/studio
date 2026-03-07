@@ -1,4 +1,6 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 import { GrpcClients } from './grpc-client';
 import { IPC } from '../shared/types';
 
@@ -132,6 +134,15 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
         resolve(undefined);
       });
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Project creation (local filesystem, no gRPC)
+
+  ipcMain.handle(IPC.CREATE_PROJECT_DIR, async (_event, parentPath: string, name: string) => {
+    const projectPath = path.join(parentPath, name);
+    fs.mkdirSync(projectPath, { recursive: true });
+    return projectPath;
   });
 
   // -------------------------------------------------------------------------

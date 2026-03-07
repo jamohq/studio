@@ -28,8 +28,8 @@ func NewBusiness(log *logger.Logger) *Business {
 }
 
 // Create starts a new terminal session with the given shell and dimensions.
-func (b *Business) Create(ctx context.Context, shell string, cols, rows uint16) (string, error) {
-	sess, err := pty.Start(shell, cols, rows)
+func (b *Business) Create(ctx context.Context, shell string, cols, rows uint16, workdir string) (string, error) {
+	sess, err := pty.Start(shell, cols, rows, workdir)
 	if err != nil {
 		return "", errs.Newf(codes.Internal, "failed to create terminal: %s", err)
 	}

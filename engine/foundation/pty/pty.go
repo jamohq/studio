@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/creack/pty"
 )
@@ -15,9 +16,31 @@ type Session struct {
 	ptm *os.File
 }
 
+// cleanEnv returns the current environment with problematic variables removed.
+func cleanEnv() []string {
+	skip := map[string]bool{
+		"CLAUDECODE":             true,
+		"CLAUDE_CODE_ENTRYPOINT": true,
+	}
+	var env []string
+	for _, e := range os.Environ() {
+		// Strip Claude Code env vars so CLI tools don't think they're nested.
+		key, _, _ := strings.Cut(e, "=")
+		if skip[key] {
+			continue
+		}
+		env = append(env, e)
+	}
+	return env
+}
+
 // Start creates a new PTY session with the given shell and dimensions.
-func Start(shell string, cols, rows uint16) (*Session, error) {
+func Start(shell string, cols, rows uint16, workdir ...string) (*Session, error) {
 	cmd := exec.Command(shell)
+	cmd.Env = cleanEnv()
+	if len(workdir) > 0 && workdir[0] != "" {
+		cmd.Dir = workdir[0]
+	}
 
 	ptm, err := pty.StartWithSize(cmd, &pty.Winsize{
 		Cols: cols,

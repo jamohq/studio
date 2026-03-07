@@ -2,7 +2,8 @@
   "name": "jamo-studio",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter jamo-desktop dev"
+    "dev": "pnpm --filter jamo-desktop dev",
+    "postinstall": "bash scripts/patch-electron-name.sh"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
