@@ -1,5 +1,24 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useTheme } from '../theme';
+import { FolderPlus, FilePlus, Diamond } from 'lucide-react';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from './ui/context-menu';
+import { cn } from '@/lib/utils';
+import { SECTIONS, SECTIONS_DIR } from '../sections';
 import type { FileEntry } from '../../shared/types';
 
 const CREATOR_DIR = '.jamo/creator';
@@ -27,99 +46,9 @@ function nameFromFile(filename: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// New-file modal
-// ---------------------------------------------------------------------------
-function NewFileModal({
-  onConfirm,
-  onCancel,
-}: {
-  onConfirm: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const { tokens } = useTheme();
-  const [value, setValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-
-  const submit = () => {
-    const trimmed = value.trim();
-    if (trimmed) onConfirm(trimmed);
-    else onCancel();
-  };
-
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)' }}
-      onClick={onCancel}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: tokens.bgSurface, border: `1px solid ${tokens.border}`, borderRadius: 8, padding: 20, width: 340, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 600, color: tokens.text, marginBottom: 4 }}>New Canvas</div>
-        <div style={{ fontSize: 11, color: tokens.textMuted, marginBottom: 12 }}>
-          Use <code style={{ background: tokens.bgDeep, padding: '0 3px', borderRadius: 2 }}>folder/name</code> to create inside a new folder.
-        </div>
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }}
-          placeholder="Document name"
-          style={{ width: '100%', fontSize: 13, padding: '6px 10px', background: tokens.bgDeep, border: `1px solid ${tokens.borderAccent}`, borderRadius: 4, color: tokens.text, outline: 'none', boxSizing: 'border-box' }}
-        />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-          <button onClick={onCancel} style={{ background: 'transparent', border: `1px solid ${tokens.border}`, borderRadius: 4, color: tokens.textMuted, cursor: 'pointer', fontSize: 12, padding: '4px 14px' }}>Cancel</button>
-          <button onClick={submit} style={{ background: tokens.accent, border: 'none', borderRadius: 4, color: '#fff', cursor: 'pointer', fontSize: 12, padding: '4px 14px' }}>Create</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Context menu
-// ---------------------------------------------------------------------------
-interface ContextMenuState { x: number; y: number; node: CreatorNode; }
-
-function ContextMenu({ menu, onRename, onDelete, onNewFile, onNewFolder, onClose }: {
-  menu: ContextMenuState; onRename: () => void; onDelete: () => void; onNewFile: () => void; onNewFolder: () => void; onClose: () => void;
-}) {
-  const { tokens } = useTheme();
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  const itemStyle: React.CSSProperties = { padding: '5px 16px', fontSize: 12, cursor: 'pointer', color: tokens.text, whiteSpace: 'nowrap' };
-  const hover = (e: React.MouseEvent<HTMLDivElement>) => { e.currentTarget.style.background = tokens.accentBg; };
-  const unhover = (e: React.MouseEvent<HTMLDivElement>) => { e.currentTarget.style.background = 'transparent'; };
-  const isDir = menu.node.entry.isDir;
-
-  return (
-    <div ref={ref} style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 9999, background: tokens.bgSurface, border: `1px solid ${tokens.border}`, borderRadius: 6, padding: '4px 0', boxShadow: '0 4px 16px rgba(0,0,0,0.3)', minWidth: 140 }}>
-      <div style={itemStyle} onMouseOver={hover} onMouseOut={unhover} onClick={() => { onRename(); onClose(); }}>Rename</div>
-      {isDir && (
-        <>
-          <div style={itemStyle} onMouseOver={hover} onMouseOut={unhover} onClick={() => { onNewFile(); onClose(); }}>New File</div>
-          <div style={itemStyle} onMouseOver={hover} onMouseOut={unhover} onClick={() => { onNewFolder(); onClose(); }}>New Folder</div>
-        </>
-      )}
-      <div style={{ height: 1, background: tokens.border, margin: '4px 0' }} />
-      <div style={{ ...itemStyle, color: tokens.danger }} onMouseOver={hover} onMouseOut={unhover} onClick={() => { onDelete(); onClose(); }}>Delete</div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFileDeleted, refreshKey }: CreatorPanelProps) {
-  const { tokens } = useTheme();
   const [nodes, setNodes] = useState<CreatorNode[]>([]);
   const nodesRef = useRef<CreatorNode[]>([]);
   nodesRef.current = nodes;
@@ -130,8 +59,8 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [renamePath, setRenamePath] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [newFileParent, setNewFileParent] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState('');
 
   // -----------------------------------------------------------------------
   // Ensure .jamo/creator exists
@@ -141,12 +70,13 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   }, [workspaceId]);
 
   // -----------------------------------------------------------------------
-  // Load directory — no file reads needed, name = filename
+  // Load directory
   // -----------------------------------------------------------------------
   const loadDir = useCallback(async (dirPath: string): Promise<CreatorNode[]> => {
     try {
       const res = await window.jamo.listDirectory(workspaceId, dirPath);
       return (res.entries || [])
+        .filter((e) => e.name !== '_sections')
         .filter((e) => e.isDir || e.name.endsWith('.json'))
         .sort((a, b) => {
           if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
@@ -225,12 +155,11 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   }, [nodes, loadDir]);
 
   // -----------------------------------------------------------------------
-  // Create new file (modal)
+  // Create new file (dialog)
   // -----------------------------------------------------------------------
   const handleCreateFile = useCallback(async (name: string, parentPath: string) => {
     try {
       await ensureCreatorDir();
-      // name can be "folder/My Drawing" — create intermediate dirs
       const parts = name.split('/').map((s) => s.trim()).filter(Boolean);
       const docName = parts.pop()!;
       let targetDir = parentPath;
@@ -249,7 +178,6 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
         elements: [],
         appState: {},
       };
-      // Filename = user-chosen name
       const filePath = `${targetDir}/${docName}.json`;
       await window.jamo.writeFile(workspaceId, filePath, JSON.stringify(doc, null, 2));
       onOpenFile(filePath);
@@ -264,7 +192,6 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   // Create folder (inline input)
   // -----------------------------------------------------------------------
   const handleCreateDir = useCallback(async (parentPath: string) => {
-    // Auto-expand parent dir if needed
     if (parentPath !== CREATOR_DIR) {
       const expandNode = async (items: CreatorNode[]): Promise<CreatorNode[]> => {
         const result: CreatorNode[] = [];
@@ -310,7 +237,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   }, [newDirName, newDirParent, workspaceId, refresh, ensureCreatorDir]);
 
   // -----------------------------------------------------------------------
-  // Rename (double-click or context menu)
+  // Rename
   // -----------------------------------------------------------------------
   const startRename = useCallback((node: CreatorNode) => {
     setRenamePath(node.path);
@@ -341,7 +268,6 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
 
       if (newPath !== renamePath) {
         await window.jamo.moveFile(workspaceId, renamePath, newPath);
-        // Update open file path if it was renamed
         if (activeFile === renamePath) {
           onOpenFile(newPath);
         }
@@ -395,6 +321,24 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   }, [dragPath, workspaceId, activeFile, onOpenFile, refresh]);
 
   // -----------------------------------------------------------------------
+  // Section click (lazy create)
+  // -----------------------------------------------------------------------
+  const handleSectionClick = useCallback(async (section: typeof SECTIONS[number]) => {
+    try {
+      await window.jamo.readFile(workspaceId, section.filePath);
+    } catch {
+      await ensureCreatorDir();
+      await window.jamo.createDirectory(workspaceId, SECTIONS_DIR);
+      await window.jamo.writeFile(
+        workspaceId,
+        section.filePath,
+        JSON.stringify(section.defaultContent(), null, 2),
+      );
+    }
+    onOpenFile(section.filePath);
+  }, [workspaceId, onOpenFile, ensureCreatorDir]);
+
+  // -----------------------------------------------------------------------
   // Click
   // -----------------------------------------------------------------------
   const handleFileClick = (node: CreatorNode) => {
@@ -411,47 +355,66 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
     const isDropping = dropTarget === node.path;
     const isRenaming = renamePath === node.path;
 
+    const nodeContent = (
+      <div
+        onClick={() => !isRenaming && handleFileClick(node)}
+        onDoubleClick={(e) => { e.stopPropagation(); startRename(node); }}
+        draggable
+        onDragStart={(e) => { setDragPath(node.path); e.dataTransfer.effectAllowed = 'move'; }}
+        onDragOver={(e) => {
+          if (isDir && dragPath && dragPath !== node.path && !node.path.startsWith(dragPath + '/')) {
+            e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropTarget(node.path);
+          }
+        }}
+        onDragLeave={() => { if (dropTarget === node.path) setDropTarget(null); }}
+        onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (isDir) handleDrop(node.path); }}
+        className={cn(
+          'py-1 px-2 text-xs cursor-pointer text-foreground flex items-center gap-1',
+          isDropping && 'bg-accent-bg border-t border-t-accent',
+          !isDropping && isActive && 'bg-accent-bg',
+          !isDropping && !isActive && 'border-t border-t-transparent',
+        )}
+        style={{ paddingLeft: 12 + depth * 16 }}
+      >
+        {isDir ? (
+          <span className="text-[10px] w-3 text-center text-foreground-muted">{node.expanded ? '\u25BE' : '\u25B8'}</span>
+        ) : (
+          <span className="w-3 text-center text-[10px] text-accent">&#9674;</span>
+        )}
+        {isRenaming ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamePath(null); }}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 text-xs bg-background-deep border border-border-accent rounded-sm text-foreground px-1 outline-none"
+          />
+        ) : (
+          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{node.displayName}</span>
+        )}
+      </div>
+    );
+
     return (
       <React.Fragment key={node.path}>
-        <div
-          onClick={() => !isRenaming && handleFileClick(node)}
-          onDoubleClick={(e) => { e.stopPropagation(); startRename(node); }}
-          onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, node }); }}
-          draggable
-          onDragStart={(e) => { setDragPath(node.path); e.dataTransfer.effectAllowed = 'move'; }}
-          onDragOver={(e) => {
-            if (isDir && dragPath && dragPath !== node.path && !node.path.startsWith(dragPath + '/')) {
-              e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropTarget(node.path);
-            }
-          }}
-          onDragLeave={() => { if (dropTarget === node.path) setDropTarget(null); }}
-          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); if (isDir) handleDrop(node.path); }}
-          style={{
-            padding: '4px 8px', paddingLeft: 12 + depth * 16, fontSize: 12, cursor: 'pointer', color: tokens.text,
-            background: isDropping ? tokens.accentBg : isActive ? tokens.accentBg : 'transparent',
-            borderTop: isDropping ? `1px solid ${tokens.accent}` : '1px solid transparent',
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          {isDir ? (
-            <span style={{ fontSize: 10, width: 12, textAlign: 'center', color: tokens.textMuted }}>{node.expanded ? '\u25BE' : '\u25B8'}</span>
-          ) : (
-            <span style={{ width: 12, textAlign: 'center', fontSize: 10, color: tokens.accent }}>&#9674;</span>
-          )}
-          {isRenaming ? (
-            <input
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenamePath(null); }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ flex: 1, fontSize: 12, background: tokens.bgDeep, border: `1px solid ${tokens.borderAccent}`, borderRadius: 3, color: tokens.text, padding: '0 4px', outline: 'none' }}
-            />
-          ) : (
-            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.displayName}</span>
-          )}
-        </div>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            {nodeContent}
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => startRename(node)}>Rename</ContextMenuItem>
+            {isDir && (
+              <>
+                <ContextMenuItem onClick={() => setNewFileParent(node.path)}>New File</ContextMenuItem>
+                <ContextMenuItem onClick={() => handleCreateDir(node.path)}>New Folder</ContextMenuItem>
+              </>
+            )}
+            <ContextMenuSeparator />
+            <ContextMenuItem className="text-destructive" onClick={() => handleDelete(node)}>Delete</ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
         {isDir && node.expanded && (
           <>
             {newDirParent === node.path && renderNewDirInput(depth + 1)}
@@ -463,7 +426,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   };
 
   const renderNewDirInput = (depth: number) => (
-    <div style={{ paddingLeft: 12 + depth * 16, padding: '2px 8px' }}>
+    <div className="px-2 py-0.5" style={{ paddingLeft: 12 + depth * 16 }}>
       <input
         autoFocus
         placeholder="folder name"
@@ -471,7 +434,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
         onChange={(e) => setNewDirName(e.target.value)}
         onBlur={commitNewDir}
         onKeyDown={(e) => { if (e.key === 'Enter') commitNewDir(); if (e.key === 'Escape') setNewDirParent(null); }}
-        style={{ fontSize: 12, background: tokens.bgDeep, border: `1px solid ${tokens.borderAccent}`, borderRadius: 3, color: tokens.text, padding: '1px 6px', outline: 'none', width: '100%' }}
+        className="text-xs bg-background-deep border border-border-accent rounded-sm text-foreground px-1.5 py-px outline-none w-full"
       />
     </div>
   );
@@ -480,51 +443,110 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
 
   return (
     <div
-      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+      className="flex flex-col h-full"
       onDragOver={(e) => { if (dragPath) { e.preventDefault(); setDropTarget(CREATOR_DIR); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null); }}
       onDrop={(e) => { e.preventDefault(); if (dropTarget === CREATOR_DIR) handleDrop(CREATOR_DIR); }}
     >
       {/* Header */}
-      <div style={{ padding: '10px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: tokens.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="px-3 py-2.5 text-[11px] font-semibold uppercase text-foreground-muted flex items-center justify-between">
         <span>Creator</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button onClick={() => handleCreateDir(CREATOR_DIR)} title="New folder" style={{ background: 'transparent', border: 'none', color: tokens.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 4px' }}>&#128193;</button>
-          <button onClick={() => setNewFileParent(CREATOR_DIR)} title="New canvas document" style={{ background: 'transparent', border: 'none', color: tokens.text, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px' }}>+</button>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleCreateDir(CREATOR_DIR)}
+            title="New folder"
+            className="h-6 w-6"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => { setNewFileParent(CREATOR_DIR); setNewFileName(''); }}
+            title="New canvas document"
+            className="h-6 w-6"
+          >
+            <FilePlus className="h-3.5 w-3.5" />
+          </Button>
         </div>
+      </div>
+
+      {/* Sections */}
+      <div className="pb-1">
+        {SECTIONS.map((section) => (
+          <div
+            key={section.id}
+            onClick={() => handleSectionClick(section)}
+            className={cn(
+              'py-1 px-2 text-xs cursor-pointer text-foreground flex items-center gap-1',
+              activeFile === section.filePath ? 'bg-accent-bg' : 'hover:bg-accent-bg/50',
+            )}
+            style={{ paddingLeft: 12 }}
+          >
+            <Diamond className="h-3 w-3 text-accent shrink-0" />
+            <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{section.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Pages sub-header */}
+      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase text-foreground-dim flex items-center justify-between">
+        <span>Pages</span>
       </div>
 
       {/* Root-level new folder input */}
       {newDirParent === CREATOR_DIR && renderNewDirInput(0)}
 
       {/* File tree */}
-      <div style={{ flex: 1, overflow: 'auto', paddingBottom: 8, borderTop: isRootDrop && nodes.length > 0 ? `1px solid ${tokens.accent}` : undefined }}>
-        {loading && <div style={{ padding: '8px 12px', fontSize: 12, color: tokens.textMuted }}>Loading...</div>}
+      <div className={cn('flex-1 overflow-auto pb-2', isRootDrop && nodes.length > 0 && 'border-t border-t-accent')}>
+        {loading && <div className="px-3 py-2 text-xs text-foreground-muted">Loading...</div>}
         {!loading && nodes.length === 0 && (
-          <div style={{ padding: '8px 12px', fontSize: 12, color: tokens.textDim }}>No creator files yet</div>
+          <div className="px-3 py-2 text-xs text-foreground-dim">No creator files yet</div>
         )}
         {nodes.map((node) => renderNode(node, 0))}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
-        <ContextMenu
-          menu={contextMenu}
-          onRename={() => startRename(contextMenu.node)}
-          onDelete={() => handleDelete(contextMenu.node)}
-          onNewFile={() => setNewFileParent(contextMenu.node.path)}
-          onNewFolder={() => handleCreateDir(contextMenu.node.path)}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-
-      {/* New file modal */}
-      {newFileParent && (
-        <NewFileModal
-          onConfirm={(name) => { handleCreateFile(name, newFileParent); setNewFileParent(null); }}
-          onCancel={() => setNewFileParent(null)}
-        />
-      )}
+      {/* New file dialog */}
+      <Dialog open={!!newFileParent} onOpenChange={(open) => { if (!open) setNewFileParent(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Canvas</DialogTitle>
+            <DialogDescription>
+              Use <code className="bg-background-deep px-1 rounded text-xs">folder/name</code> to create inside a new folder.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            value={newFileName}
+            onChange={(e) => setNewFileName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const trimmed = newFileName.trim();
+                if (trimmed && newFileParent) {
+                  handleCreateFile(trimmed, newFileParent);
+                  setNewFileParent(null);
+                  setNewFileName('');
+                }
+              }
+              if (e.key === 'Escape') { setNewFileParent(null); setNewFileName(''); }
+            }}
+            placeholder="Document name"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setNewFileParent(null); setNewFileName(''); }}>Cancel</Button>
+            <Button onClick={() => {
+              const trimmed = newFileName.trim();
+              if (trimmed && newFileParent) {
+                handleCreateFile(trimmed, newFileParent);
+                setNewFileParent(null);
+                setNewFileName('');
+              }
+            }}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

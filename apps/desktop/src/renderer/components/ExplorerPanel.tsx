@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useTheme } from '../theme';
 import type { FileEntry } from '../../shared/types';
 
 interface ExplorerPanelProps {
@@ -15,7 +14,6 @@ interface TreeNode {
 }
 
 export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
-  const { tokens } = useTheme();
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,23 +92,16 @@ export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
       <React.Fragment key={node.path}>
         <div
           onClick={() => isDir && toggleDir(node.path)}
-          style={{
-            padding: '3px 8px',
-            paddingLeft: 12 + depth * 16,
-            fontSize: 12,
-            cursor: isDir ? 'pointer' : 'default',
-            color: tokens.text,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-          }}
+          className="py-[3px] px-2 text-xs text-foreground flex items-center gap-1"
+          style={{ paddingLeft: 12 + depth * 16 }}
         >
-          {isDir && (
-            <span style={{ fontSize: 10, width: 12, textAlign: 'center', color: tokens.textMuted }}>
+          {isDir ? (
+            <span className="text-[10px] w-3 text-center text-foreground-muted">
               {node.expanded ? '\u25BE' : '\u25B8'}
             </span>
+          ) : (
+            <span className="w-3" />
           )}
-          {!isDir && <span style={{ width: 12 }} />}
           <span>{node.entry.name}</span>
         </div>
         {isDir && node.expanded && node.children?.map((child) => renderNode(child, depth + 1))}
@@ -119,15 +110,15 @@ export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '10px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: tokens.textMuted }}>
+    <div className="flex flex-col h-full">
+      <div className="px-3 py-2.5 text-[11px] font-semibold uppercase text-foreground-muted">
         Explorer
       </div>
-      <div style={{ flex: 1, overflow: 'auto', paddingBottom: 8 }}>
-        {loading && <div style={{ padding: '8px 12px', fontSize: 12, color: tokens.textMuted }}>Loading...</div>}
-        {error && <div style={{ padding: '8px 12px', fontSize: 12, color: tokens.textDim }}>{error}</div>}
+      <div className="flex-1 overflow-auto pb-2">
+        {loading && <div className="px-3 py-2 text-xs text-foreground-muted">Loading...</div>}
+        {error && <div className="px-3 py-2 text-xs text-foreground-dim">{error}</div>}
         {!loading && !error && nodes.length === 0 && (
-          <div style={{ padding: '8px 12px', fontSize: 12, color: tokens.textDim }}>Empty workspace</div>
+          <div className="px-3 py-2 text-xs text-foreground-dim">Empty workspace</div>
         )}
         {nodes.map((node) => renderNode(node, 0))}
       </div>

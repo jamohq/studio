@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme */
+    --background: 0 0% 96%;          /* #f5f5f5 */
+    --background-surface: 0 0% 100%; /* #ffffff */
+    --background-deep: 0 0% 91%;     /* #e8e8e8 */
+    --border: 0 0% 82%;              /* #d0d0d0 */
+    --border-accent: 240 33% 50%;    /* #5555aa */
+    --foreground: 0 0% 13%;          /* #222222 */
+    --foreground-muted: 0 0% 40%;    /* #666666 */
+    --foreground-dim: 0 0% 60%;      /* #999999 */
+    --accent: 240 33% 50%;           /* #5555aa */
+    --accent-bg: 240 33% 93%;        /* #e8e8f4 */
+    --destructive: 0 60% 50%;        /* #cc3333 */
+    --success: 120 52% 35%;          /* #2a8a2a */
+    --warning: 27 70% 41%;           /* #b07020 */
+  }
+
+  .dark {
+    --background: 240 33% 14%;       /* #1a1a2e */
+    --background-surface: 240 33% 12%; /* #16162a */
+    --background-deep: 240 33% 8%;   /* #0d0d1a */
+    --border: 0 0% 20%;              /* #333333 */
+    --border-accent: 240 33% 50%;    /* #5555aa */
+    --foreground: 0 0% 88%;          /* #e0e0e0 */
+    --foreground-muted: 0 0% 53%;    /* #888888 */
+    --foreground-dim: 0 0% 33%;      /* #555555 */
+    --accent: 240 33% 50%;           /* #5555aa */
+    --accent-bg: 240 33% 24%;        /* #2d2d4e */
+    --destructive: 0 100% 71%;       /* #ff6b6b */
+    --success: 120 33% 67%;          /* #88cc88 */
+    --warning: 27 50% 57%;           /* #cc8855 */
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html, body, #root {
+    @apply h-full w-full overflow-hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+/* Rich text editor (tiptap / ProseMirror) */
+.rich-text-editor .ProseMirror {
+  @apply text-foreground text-sm leading-relaxed;
+}
+
+.rich-text-editor .ProseMirror h1 {
+  @apply text-2xl font-bold mb-3 mt-4;
+}
+
+.rich-text-editor .ProseMirror h2 {
+  @apply text-xl font-semibold mb-2 mt-3;
+}
+
+.rich-text-editor .ProseMirror h3 {
+  @apply text-lg font-semibold mb-2 mt-3;
+}
+
+.rich-text-editor .ProseMirror p {
+  @apply mb-2;
+}
+
+.rich-text-editor .ProseMirror ul {
+  @apply list-disc pl-6 mb-2;
+}
+
+.rich-text-editor .ProseMirror ol {
+  @apply list-decimal pl-6 mb-2;
+}
+
+.rich-text-editor .ProseMirror li {
+  @apply mb-0.5;
+}
+
+.rich-text-editor .ProseMirror p.is-editor-empty:first-child::before {
+  @apply text-foreground-dim;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}

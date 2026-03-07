@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme } from '../theme';
+import { Button } from './ui/button';
 
 interface RecentWorkspace {
   path: string;
@@ -16,53 +16,24 @@ interface WelcomePageProps {
 export type { RecentWorkspace };
 
 export default function WelcomePage({ onOpenFolder, recentWorkspaces, onOpenRecent }: WelcomePageProps) {
-  const { tokens } = useTheme();
-
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100%',
-      gap: 24,
-      padding: 40,
-    }}>
+    <div className="flex flex-col items-center justify-center h-full gap-6 p-10">
       {/* Logo / Title */}
-      <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: -1, color: tokens.text }}>
-          J
-        </div>
-        <div style={{ fontSize: 22, fontWeight: 600, color: tokens.text, marginTop: 4 }}>
-          Jamo Studio
-        </div>
+      <div className="text-center mb-4">
+        <div className="text-5xl font-bold tracking-tight text-foreground">J</div>
+        <div className="text-[22px] font-semibold text-foreground mt-1">Jamo Studio</div>
       </div>
 
       {/* Primary action */}
-      <button
-        onClick={onOpenFolder}
-        style={{
-          padding: '12px 48px',
-          background: tokens.accent,
-          border: 'none',
-          borderRadius: 6,
-          color: '#fff',
-          fontSize: 15,
-          fontWeight: 600,
-          cursor: 'pointer',
-          minWidth: 280,
-        }}
-      >
+      <Button onClick={onOpenFolder} className="px-12 min-w-[280px] text-[15px] font-semibold">
         Open Folder
-      </button>
+      </Button>
 
       {/* Recent workspaces */}
       {recentWorkspaces.length > 0 && (
-        <div style={{ width: '100%', maxWidth: 400, marginTop: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: tokens.textMuted, marginBottom: 12 }}>
-            Workspaces
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="w-full max-w-[400px] mt-4">
+          <div className="text-[13px] font-semibold text-foreground-muted mb-3">Workspaces</div>
+          <div className="flex flex-col gap-1">
             {recentWorkspaces.map((ws) => {
               const parts = ws.path.split('/');
               const parent = parts.length > 1 ? parts.slice(0, -1).join('/').replace(/^\/Users\/[^/]+/, '~') : '';
@@ -70,22 +41,10 @@ export default function WelcomePage({ onOpenFolder, recentWorkspaces, onOpenRece
                 <button
                   key={ws.path}
                   onClick={() => onOpenRecent(ws.path)}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                    padding: '10px 16px',
-                    background: 'transparent',
-                    border: `1px solid ${tokens.border}`,
-                    borderRadius: 6,
-                    color: tokens.text,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                  }}
+                  className="flex flex-col items-start px-4 py-2.5 bg-transparent border border-border rounded-md text-foreground cursor-pointer text-left w-full hover:bg-accent-bg transition-colors"
                 >
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{ws.name}</span>
-                  <span style={{ fontSize: 11, color: tokens.textMuted, marginTop: 2 }}>{parent}</span>
+                  <span className="text-[13px] font-medium">{ws.name}</span>
+                  <span className="text-[11px] text-foreground-muted mt-0.5">{parent}</span>
                 </button>
               );
             })}

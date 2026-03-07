@@ -3,29 +3,39 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useTheme } from '../theme';
+import { Button } from './ui/button';
+
+const TERM_THEMES = {
+  dark: { background: '#1a1a2e', foreground: '#e0e0e0', cursor: '#e0e0e0' },
+  light: { background: '#f5f5f5', foreground: '#222222', cursor: '#222222' },
+} as const;
 
 interface TerminalPanelProps {
   workspaceId: string;
   onClose: () => void;
+  onSessionReady?: (sessionId: string) => void;
+  onSessionEnd?: () => void;
 }
 
-export default function TerminalPanel({ workspaceId, onClose }: TerminalPanelProps) {
+export default function TerminalPanel({ workspaceId, onClose, onSessionReady, onSessionEnd }: TerminalPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const sessionRef = useRef<string | null>(null);
   const [status, setStatus] = useState<string>('Starting...');
-  const { tokens, theme } = useTheme();
+  const { theme } = useTheme();
+
+  // Update xterm colors in place when theme changes (without recreating the session)
+  useEffect(() => {
+    if (!termRef.current) return;
+    termRef.current.options.theme = TERM_THEMES[theme];
+  }, [theme]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const term = new Terminal({
-      theme: {
-        background: theme === 'dark' ? '#1a1a2e' : '#f5f5f5',
-        foreground: theme === 'dark' ? '#e0e0e0' : '#222222',
-        cursor: theme === 'dark' ? '#e0e0e0' : '#222222',
-      },
+      theme: TERM_THEMES[theme],
       fontSize: 13,
       fontFamily: 'Menlo, Monaco, monospace',
     });
@@ -54,6 +64,7 @@ export default function TerminalPanel({ workspaceId, onClose }: TerminalPanelPro
       if (sessionId === sessionRef.current) {
         setStatus('Session ended');
         sessionRef.current = null;
+        onSessionEnd?.();
       }
     });
 
@@ -72,6 +83,7 @@ export default function TerminalPanel({ workspaceId, onClose }: TerminalPanelPro
         sessionRef.current = sessionId;
         setStatus('Connected');
         window.jamo.startTerminalStream(sessionId);
+        onSessionReady?.(sessionId);
 
         // Send claude command after a short delay for shell init
         setTimeout(() => {
@@ -90,43 +102,26 @@ export default function TerminalPanel({ workspaceId, onClose }: TerminalPanelPro
       ro.disconnect();
       term.dispose();
     };
-  }, [theme, workspaceId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId]);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      borderLeft: `1px solid ${tokens.border}`,
-    }}>
-      <div style={{
-        padding: '4px 8px',
-        borderBottom: `1px solid ${tokens.border}`,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: tokens.textMuted }}>Terminal</span>
-        <span style={{ fontSize: 10, color: tokens.textDim }}>{status}</span>
-        <div style={{ flex: 1 }} />
-        <button
+    <div className="flex flex-col h-full border-l">
+      <div className="px-2 py-1 border-b flex items-center gap-2 shrink-0">
+        <span className="text-[11px] font-semibold uppercase text-foreground-muted">Terminal</span>
+        <span className="text-[10px] text-foreground-dim">{status}</span>
+        <div className="flex-1" />
+        <Button
+          variant="ghost"
+          size="icon"
           onClick={onClose}
           title="Close terminal"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: tokens.textMuted,
-            cursor: 'pointer',
-            fontSize: 14,
-            lineHeight: 1,
-            padding: '2px 4px',
-          }}
+          className="h-6 w-6 text-foreground-muted"
         >
-          ×
-        </button>
+          <span className="text-sm leading-none">&times;</span>
+        </Button>
       </div>
-      <div ref={containerRef} style={{ flex: 1, padding: 4 }} />
+      <div ref={containerRef} className="flex-1 p-1" />
     </div>
   );
 }
