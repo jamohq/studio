@@ -12,10 +12,12 @@ import (
 
 	"github.com/jamojamo/studio/engine/app/services/event"
 	"github.com/jamojamo/studio/engine/app/services/generate"
+	gitservice "github.com/jamojamo/studio/engine/app/services/git"
 	"github.com/jamojamo/studio/engine/app/services/health"
 	"github.com/jamojamo/studio/engine/app/services/terminal"
 	"github.com/jamojamo/studio/engine/app/services/workspace"
 	"github.com/jamojamo/studio/engine/business/domain/generatebus"
+	"github.com/jamojamo/studio/engine/business/domain/gitbus"
 	"github.com/jamojamo/studio/engine/business/domain/terminalbus"
 	"github.com/jamojamo/studio/engine/business/domain/workspacebus"
 	"github.com/jamojamo/studio/engine/foundation/grpcserver"
@@ -76,6 +78,7 @@ func run(ctx context.Context, log *logger.Logger) error {
 	wsBus := workspacebus.NewBusiness(log)
 	termBus := terminalbus.NewBusiness(log)
 	genBus := generatebus.NewBusiness(log)
+	gitBus := gitbus.NewBusiness(log, wsBus)
 
 	// -------------------------------------------------------------------------
 	// Register gRPC services.
@@ -104,6 +107,11 @@ func run(ctx context.Context, log *logger.Logger) error {
 		GenerateBus:  genBus,
 		WorkspaceBus: wsBus,
 		EventSender:  eventApp.Send,
+	})
+
+	gitservice.Register(srv, gitservice.Config{
+		Log:    log,
+		GitBus: gitBus,
 	})
 
 	// -------------------------------------------------------------------------

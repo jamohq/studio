@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package jamo.v1;
+
+option go_package = "github.com/jamojamo/studio/engine/proto/jamo/v1;jamov1";
+
+service GitService {
+  rpc Init(GitInitRequest) returns (GitInitResponse);
+  rpc Status(GitStatusRequest) returns (GitStatusResponse);
+  rpc Diff(GitDiffRequest) returns (GitDiffResponse);
+  rpc Commit(GitCommitRequest) returns (GitCommitResponse);
+  rpc Log(GitLogRequest) returns (GitLogResponse);
+}
+
+message GitInitRequest {
+  string workspace_id = 1;
+}
+
+message GitInitResponse {
+  bool already_initialized = 1;
+}
+
+message GitStatusRequest {
+  string workspace_id = 1;
+}
+
+message GitStatusResponse {
+  repeated ChangedFile files = 1;
+  bool is_clean = 2;
+}
+
+message ChangedFile {
+  string path = 1;
+  string status = 2;
+}
+
+message GitDiffRequest {
+  string workspace_id = 1;
+  string file_path = 2;
+}
+
+message GitDiffResponse {
+  string diff = 1;
+}
+
+message GitCommitRequest {
+  string workspace_id = 1;
+  string message = 2;
+}
+
+message GitCommitResponse {
+  string commit_hash = 1;
+}
+
+message GitLogRequest {
+  string workspace_id = 1;
+  int32 limit = 2;
+}
+
+message GitLogResponse {
+  repeated GitLogEntry entries = 1;
+}
+
+message GitLogEntry {
+  string hash = 1;
+  string short_hash = 2;
+  string message = 3;
+  string timestamp = 4;
+}

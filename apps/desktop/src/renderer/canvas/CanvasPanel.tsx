@@ -3,13 +3,16 @@ import { Excalidraw } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import { useTheme } from '../theme';
 import { exportToClipboard } from './export';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { SECTIONS_DIR, findSection } from '../sections';
 import type { CanvasDocument } from './types';
 
 const AUTOSAVE_DELAY_MS = 2000;
 const BG_DARK = '#0d0d1a';
 const BG_LIGHT = '#ffffff';
 
-/** Derive display name from file path: ".jamo/creator/My Drawing.json" → "My Drawing" */
+/** Derive display name from file path: ".jamo/creator/My Drawing.json" -> "My Drawing" */
 function displayName(filePath: string): string {
   return (filePath.split('/').pop() || '').replace(/\.json$/, '');
 }
@@ -19,10 +22,11 @@ interface CanvasPanelProps {
   filePath: string;
   onClose: () => void;
   onFileRenamed?: (oldPath: string, newPath: string) => void;
+  readOnly?: boolean;
 }
 
-export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRenamed }: CanvasPanelProps) {
-  const { theme, tokens } = useTheme();
+export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRenamed, readOnly }: CanvasPanelProps) {
+  const { theme } = useTheme();
   const [doc, setDoc] = useState<CanvasDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -109,11 +113,14 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRena
     exportToClipboard(doc);
   }, [doc]);
 
+  const isSection = filePath.startsWith(SECTIONS_DIR);
+
   // Rename = rename the actual file
   const startRename = useCallback(() => {
+    if (isSection) return;
     setEditName(displayName(filePath));
     setEditing(true);
-  }, [filePath]);
+  }, [filePath, isSection]);
 
   const commitRename = useCallback(async () => {
     const trimmed = editName.trim();
@@ -137,11 +144,11 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRena
     }
   }, [editName, filePath, workspaceId, saveDocument, onFileRenamed]);
 
-  const name = displayName(filePath);
+  const name = findSection(filePath)?.label ?? displayName(filePath);
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: tokens.textMuted }}>
+      <div className="flex items-center justify-center h-full text-foreground-muted">
         Loading...
       </div>
     );
@@ -149,24 +156,26 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRena
 
   if (!doc) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: tokens.textDim }}>
+      <div className="flex items-center justify-center h-full text-foreground-dim">
         Failed to load document
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '4px 10px', borderBottom: `1px solid ${tokens.border}`, gap: 8, flexShrink: 0 }}>
-        <button
-          style={{ background: 'transparent', border: 'none', color: tokens.textMuted, cursor: 'pointer', fontSize: 12 }}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center px-2.5 py-1 border-b gap-2 shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => { saveDocument(); onClose(); }}
           title="Close document"
+          className="text-foreground-muted text-xs h-7"
         >
           Close
-        </button>
+        </Button>
         {editing ? (
-          <input
+          <Input
             autoFocus
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
@@ -175,39 +184,31 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRena
               if (e.key === 'Enter') commitRename();
               if (e.key === 'Escape') setEditing(false);
             }}
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              background: tokens.bgDeep,
-              border: `1px solid ${tokens.borderAccent}`,
-              borderRadius: 3,
-              color: tokens.text,
-              padding: '1px 6px',
-              outline: 'none',
-              width: 200,
-            }}
+            className="text-[13px] font-semibold w-[200px] h-7 bg-background-deep border-border-accent"
           />
         ) : (
           <span
-            style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            className="text-[13px] font-semibold cursor-pointer"
             onDoubleClick={startRename}
             title="Double-click to rename"
           >
             {name}
           </span>
         )}
-        {saved && <span style={{ fontSize: 10, color: tokens.success }}>Saved</span>}
-        <div style={{ flex: 1 }} />
-        <button
-          style={{ background: 'transparent', border: `1px solid ${tokens.border}`, borderRadius: 4, color: tokens.textMuted, cursor: 'pointer', fontSize: 11, padding: '3px 10px' }}
+        {saved && <span className="text-[10px] text-success">Saved</span>}
+        <div className="flex-1" />
+        <Button
+          variant="outline"
+          size="sm"
           onClick={handleExport}
           title="Export for AI (copies JSON to clipboard)"
+          className="text-[11px] h-7"
         >
           Export for AI
-        </button>
+        </Button>
       </div>
 
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div className="flex-1 relative">
         <Excalidraw
           key={theme}
           initialData={{
@@ -218,13 +219,14 @@ export default function CanvasPanel({ workspaceId, filePath, onClose, onFileRena
               viewBackgroundColor: theme === 'dark' ? BG_DARK : BG_LIGHT,
             } as any,
           }}
-          onChange={handleChange}
+          onChange={readOnly ? undefined : handleChange}
           theme={theme}
           UIOptions={{
             canvasActions: {
               saveAsImage: true,
               export: false,
               saveToActiveFile: false,
+              changeViewBackgroundColor: !readOnly,
             },
           }}
         />

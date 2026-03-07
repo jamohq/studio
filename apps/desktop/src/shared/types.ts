@@ -56,6 +56,36 @@ export interface JamoEvent {
   timestampMs: number;
 }
 
+// Git types
+export interface ChangedFile {
+  path: string;
+  status: string;
+}
+
+export interface GitStatusResponse {
+  files: ChangedFile[];
+  isClean: boolean;
+}
+
+export interface GitDiffResponse {
+  diff: string;
+}
+
+export interface GitCommitResponse {
+  commitHash: string;
+}
+
+export interface GitLogEntry {
+  hash: string;
+  shortHash: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface GitLogResponse {
+  entries: GitLogEntry[];
+}
+
 // IPC channel names
 export const IPC = {
   PING: 'jamo:ping',
@@ -79,6 +109,11 @@ export const IPC = {
   MOVE_FILE: 'jamo:move-file',
   CREATE_DIRECTORY: 'jamo:create-directory',
   DELETE_FILE: 'jamo:delete-file',
+  GIT_INIT: 'jamo:git-init',
+  GIT_STATUS: 'jamo:git-status',
+  GIT_DIFF: 'jamo:git-diff',
+  GIT_COMMIT: 'jamo:git-commit',
+  GIT_LOG: 'jamo:git-log',
 } as const;
 
 // Window API exposed via preload
@@ -104,6 +139,11 @@ export interface JamoAPI {
   applyPatches(wsId: string, taskId: string, patches: Patch[]): Promise<ApplyPatchesResponse>;
   subscribeEvents(wsId: string): void;
   onEvent(cb: (event: JamoEvent) => void): () => void;
+  gitInit(wsId: string): Promise<{ alreadyInitialized: boolean }>;
+  gitStatus(wsId: string): Promise<GitStatusResponse>;
+  gitDiff(wsId: string, filePath?: string): Promise<GitDiffResponse>;
+  gitCommit(wsId: string, message: string): Promise<GitCommitResponse>;
+  gitLog(wsId: string, limit?: number): Promise<GitLogResponse>;
 }
 
 declare global {

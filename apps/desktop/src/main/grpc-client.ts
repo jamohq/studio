@@ -8,6 +8,7 @@ export interface GrpcClients {
   terminal: any;
   generate: any;
   event: any;
+  git: any;
 }
 
 function loadProto(protoFile: string) {
@@ -57,6 +58,7 @@ export function createClients(port: number, token: string): GrpcClients {
   const terminalPkg = loadProto('terminal.proto') as any;
   const generatePkg = loadProto('generate.proto') as any;
   const eventPkg = loadProto('event.proto') as any;
+  const gitPkg = loadProto('git.proto') as any;
 
   return {
     health: new healthPkg.jamo.v1.HealthService(address, creds, options),
@@ -64,5 +66,6 @@ export function createClients(port: number, token: string): GrpcClients {
     terminal: new terminalPkg.jamo.v1.TerminalService(address, creds, options),
     generate: new generatePkg.jamo.v1.GenerateService(address, creds, options),
     event: new eventPkg.jamo.v1.EventService(address, creds, options),
+    git: new gitPkg.jamo.v1.GitService(address, creds, options),
   };
 }

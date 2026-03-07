@@ -54,6 +54,21 @@ const api = {
     return () => ipcRenderer.removeListener('jamo:terminal-end', handler);
   },
 
+  gitInit: (wsId: string) =>
+    ipcRenderer.invoke('jamo:git-init', wsId),
+
+  gitStatus: (wsId: string) =>
+    ipcRenderer.invoke('jamo:git-status', wsId),
+
+  gitDiff: (wsId: string, filePath?: string) =>
+    ipcRenderer.invoke('jamo:git-diff', wsId, filePath),
+
+  gitCommit: (wsId: string, message: string) =>
+    ipcRenderer.invoke('jamo:git-commit', wsId, message),
+
+  gitLog: (wsId: string, limit?: number) =>
+    ipcRenderer.invoke('jamo:git-log', wsId, limit),
+
   generate: (wsId: string, prompt: string) =>
     ipcRenderer.invoke('jamo:generate', wsId, prompt),
 

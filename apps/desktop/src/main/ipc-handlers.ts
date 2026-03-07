@@ -134,6 +134,64 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
     });
   });
 
+  // -------------------------------------------------------------------------
+  // Git RPCs
+
+  ipcMain.handle(IPC.GIT_INIT, async (_event, wsId: string) => {
+    return new Promise((resolve, reject) => {
+      clients.git.init({ workspaceId: wsId }, (err: any, res: any) => {
+        if (err) return reject(err);
+        resolve({ alreadyInitialized: res.alreadyInitialized });
+      });
+    });
+  });
+
+  ipcMain.handle(IPC.GIT_STATUS, async (_event, wsId: string) => {
+    return new Promise((resolve, reject) => {
+      clients.git.status({ workspaceId: wsId }, (err: any, res: any) => {
+        if (err) return reject(err);
+        const files = (res.files || []).map((f: any) => ({
+          path: f.path,
+          status: f.status,
+        }));
+        resolve({ files, isClean: res.isClean });
+      });
+    });
+  });
+
+  ipcMain.handle(IPC.GIT_DIFF, async (_event, wsId: string, filePath?: string) => {
+    return new Promise((resolve, reject) => {
+      clients.git.diff({ workspaceId: wsId, filePath: filePath || '' }, (err: any, res: any) => {
+        if (err) return reject(err);
+        resolve({ diff: res.diff });
+      });
+    });
+  });
+
+  ipcMain.handle(IPC.GIT_COMMIT, async (_event, wsId: string, message: string) => {
+    return new Promise((resolve, reject) => {
+      clients.git.commit({ workspaceId: wsId, message }, (err: any, res: any) => {
+        if (err) return reject(err);
+        resolve({ commitHash: res.commitHash });
+      });
+    });
+  });
+
+  ipcMain.handle(IPC.GIT_LOG, async (_event, wsId: string, limit?: number) => {
+    return new Promise((resolve, reject) => {
+      clients.git.log({ workspaceId: wsId, limit: limit || 20 }, (err: any, res: any) => {
+        if (err) return reject(err);
+        const entries = (res.entries || []).map((e: any) => ({
+          hash: e.hash,
+          shortHash: e.shortHash,
+          message: e.message,
+          timestamp: e.timestamp,
+        }));
+        resolve({ entries });
+      });
+    });
+  });
+
   ipcMain.handle(IPC.CREATE_TERMINAL, async (_event, wsId: string, cols: number, rows: number) => {
     return new Promise((resolve, reject) => {
       clients.terminal.createTerminal(
