@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { ipcMain, BrowserWindow, dialog, shell } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { GrpcClients } from './grpc-client';
@@ -21,7 +21,7 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
 
   ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-      properties: ['openDirectory'],
+      properties: ['openDirectory', 'createDirectory'],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
@@ -137,12 +137,26 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
   });
 
   // -------------------------------------------------------------------------
-  // Project creation (local filesystem, no gRPC)
+  // Project creation helpers (local filesystem, no gRPC)
 
-  ipcMain.handle(IPC.CREATE_PROJECT_DIR, async (_event, parentPath: string, name: string) => {
-    const projectPath = path.join(parentPath, name);
-    fs.mkdirSync(projectPath, { recursive: true });
-    return projectPath;
+  ipcMain.handle(IPC.CHECK_DIR_EMPTY, async (_event, dirPath: string) => {
+    try {
+      const entries = fs.readdirSync(dirPath);
+      return entries.length === 0;
+    } catch {
+      return true; // doesn't exist yet, treat as empty
+    }
+  });
+
+  ipcMain.handle(IPC.CLEAR_DIR, async (_event, dirPath: string) => {
+    const entries = fs.readdirSync(dirPath);
+    for (const entry of entries) {
+      fs.rmSync(path.join(dirPath, entry), { recursive: true, force: true });
+    }
+  });
+
+  ipcMain.handle(IPC.OPEN_EXTERNAL, async (_event, url: string) => {
+    await shell.openExternal(url);
   });
 
   // -------------------------------------------------------------------------

@@ -54,8 +54,11 @@ const api = {
     return () => ipcRenderer.removeListener('jamo:terminal-end', handler);
   },
 
-  createProjectDirectory: (parentPath: string, name: string) =>
-    ipcRenderer.invoke('jamo:create-project-dir', parentPath, name),
+  checkDirEmpty: (dirPath: string) =>
+    ipcRenderer.invoke('jamo:check-dir-empty', dirPath),
+
+  clearDir: (dirPath: string) =>
+    ipcRenderer.invoke('jamo:clear-dir', dirPath),
 
   gitInit: (wsId: string) =>
     ipcRenderer.invoke('jamo:git-init', wsId),
@@ -86,6 +89,8 @@ const api = {
     ipcRenderer.on('jamo:event', handler);
     return () => ipcRenderer.removeListener('jamo:event', handler);
   },
+
+  openExternal: (url: string) => ipcRenderer.invoke('jamo:open-external', url),
 };
 
 contextBridge.exposeInMainWorld('jamo', api);

@@ -114,7 +114,9 @@ export const IPC = {
   GIT_DIFF: 'jamo:git-diff',
   GIT_COMMIT: 'jamo:git-commit',
   GIT_LOG: 'jamo:git-log',
-  CREATE_PROJECT_DIR: 'jamo:create-project-dir',
+  CHECK_DIR_EMPTY: 'jamo:check-dir-empty',
+  CLEAR_DIR: 'jamo:clear-dir',
+  OPEN_EXTERNAL: 'jamo:open-external',
 } as const;
 
 // Window API exposed via preload
@@ -140,12 +142,14 @@ export interface JamoAPI {
   applyPatches(wsId: string, taskId: string, patches: Patch[]): Promise<ApplyPatchesResponse>;
   subscribeEvents(wsId: string): void;
   onEvent(cb: (event: JamoEvent) => void): () => void;
-  createProjectDirectory(parentPath: string, name: string): Promise<string>;
+  checkDirEmpty(dirPath: string): Promise<boolean>;
+  clearDir(dirPath: string): Promise<void>;
   gitInit(wsId: string): Promise<{ alreadyInitialized: boolean }>;
   gitStatus(wsId: string): Promise<GitStatusResponse>;
   gitDiff(wsId: string, filePath?: string): Promise<GitDiffResponse>;
   gitCommit(wsId: string, message: string): Promise<GitCommitResponse>;
   gitLog(wsId: string, limit?: number): Promise<GitLogResponse>;
+  openExternal(url: string): Promise<void>;
 }
 
 declare global {

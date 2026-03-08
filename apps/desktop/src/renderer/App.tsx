@@ -7,10 +7,11 @@ import CreatorPanel from './components/CreatorPanel';
 import CanvasPanel from './canvas/CanvasPanel';
 import RichTextPanel from './richtext/RichTextPanel';
 import TerminalPanel from './components/TerminalPanel';
+import RunTerminalPanel from './components/RunTerminalPanel';
 import ActionsPanel from './components/ActionsPanel';
 import ChangesPanel from './components/ChangesPanel';
 import { useSyncStatus } from './hooks/useSyncStatus';
-import { createPortfolioScaffold } from './scaffold';
+import { createPortfolioScaffold, createEmptyScaffold, ScaffoldResult } from './scaffold';
 import { findSection } from './sections';
 import { Button } from './components/ui/button';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,14 @@ function toBase64(str: string): string {
   }
   return btoa(binary);
 }
+
+/** Send a shell command to a terminal session and press Enter. */
+function sendShellCommand(sessionId: string, cmd: string): void {
+  window.jamo.sendTerminalInput(sessionId, toBase64(cmd + '\r'));
+}
+
+/** Polling interval (ms) for checking action completion via exit-status file. */
+const ACTION_POLL_MS = 2000;
 
 const RECENT_WS_KEY = 'jamo-recent-workspaces';
 const MAX_RECENT = 10;
@@ -53,8 +62,15 @@ export default function App() {
   const [creatorRefreshKey, setCreatorRefreshKey] = useState(0);
   const [terminalSessionId, setTerminalSessionId] = useState<string | null>(null);
   const pendingActionRef = useRef<string | null>(null);
+  const [runState, setRunState] = useState<'idle' | 'running'>('idle');
+  const [runSessionId, setRunSessionId] = useState<string | null>(null);
+  const [runTerminalMounted, setRunTerminalMounted] = useState(false);
+  const [activeTerminalTab, setActiveTerminalTab] = useState<'claude' | 'run'>('claude');
+  const pendingRunRef = useRef(false);
   const [recentWorkspaces, setRecentWorkspaces] = useState<RecentWorkspace[]>(loadRecentWorkspaces);
   const { mode: syncMode, lastAction, setMode: setSyncMode } = useSyncStatus(workspaceId);
+  const [actionStatus, setActionStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [actionLabel, setActionLabel] = useState('');
 
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem('jamo-theme') as Theme) || 'dark';
@@ -93,22 +109,36 @@ export default function App() {
     }
   }, []);
 
-  const createProject = useCallback(async (parentPath: string, name: string) => {
+  const scaffoldAndOpen = useCallback(async (dirPath: string, scaffold: ScaffoldResult) => {
     try {
-      const projectPath = await window.jamo.createProjectDirectory(parentPath, name);
-      const res = await window.jamo.openWorkspace(projectPath);
+      const res = await window.jamo.openWorkspace(dirPath);
       setWorkspaceId(res.workspaceId);
       setRecentWorkspaces(saveRecentWorkspace(res.path));
       setOpenFile(null);
       setActivePanel('creator');
 
-      // Scaffold sample creator files.
-      const files = createPortfolioScaffold();
-      for (const file of files) {
+      for (const file of scaffold.files) {
         await window.jamo.writeFile(res.workspaceId, file.path, JSON.stringify(file.content, null, 2));
       }
 
-      // Init git with the scaffolded files.
+      // Write binary files (images, etc.)
+      for (const bin of scaffold.binaryFiles) {
+        try {
+          const resp = await fetch(bin.fetchUrl);
+          const blob = await resp.blob();
+          const buf = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let binary = '';
+          for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const b64 = btoa(binary);
+          await window.jamo.writeFileBinary(res.workspaceId, bin.path, b64);
+        } catch (err) {
+          console.warn(`Failed to write binary file ${bin.path}:`, err);
+        }
+      }
+
       await window.jamo.gitInit(res.workspaceId);
       await window.jamo.gitCommit(res.workspaceId, 'Initial project scaffold');
 
@@ -117,6 +147,15 @@ export default function App() {
       console.error('Failed to create project:', err);
     }
   }, []);
+
+  const createEmptyProject = useCallback((dirPath: string) => {
+    return scaffoldAndOpen(dirPath, createEmptyScaffold());
+  }, [scaffoldAndOpen]);
+
+  const createSampleProject = useCallback((dirPath: string) => {
+    return scaffoldAndOpen(dirPath, createPortfolioScaffold());
+  }, [scaffoldAndOpen]);
+
 
   const handleOpenCreatorFile = useCallback((relPath: string) => {
     setOpenFile(relPath);
@@ -162,29 +201,119 @@ export default function App() {
     setSyncMode('synced', null);
   }, [setSyncMode]);
 
-  const sendActionToTerminal = useCallback((prompt: string) => {
+  const handleRun = useCallback(() => {
+    setActiveTerminalTab('run');
     if (!terminalOpen) {
-      pendingActionRef.current = prompt;
+      setTerminalMounted(true);
+      setTerminalOpen(true);
+    }
+    if (runState === 'running' && runSessionId) {
+      // Rerun: Ctrl+C, wait, then make run
+      window.jamo.sendTerminalInput(runSessionId, btoa('\x03'));
+      setTimeout(() => {
+        if (runSessionId) {
+          window.jamo.sendTerminalInput(runSessionId, btoa('make run\r'));
+        }
+      }, 300);
+      return;
+    }
+    if (runSessionId) {
+      window.jamo.sendTerminalInput(runSessionId, btoa('make run\r'));
+      setRunState('running');
+    } else {
+      // Need to mount run terminal first, queue command
+      pendingRunRef.current = true;
+      setRunTerminalMounted(true);
+    }
+  }, [runState, runSessionId, terminalOpen]);
+
+  const handleStop = useCallback(() => {
+    if (runSessionId) {
+      window.jamo.sendTerminalInput(runSessionId, btoa('\x03'));
+    }
+    setRunState('idle');
+  }, [runSessionId]);
+
+  const handleRunSessionReady = useCallback((sessionId: string) => {
+    setRunSessionId(sessionId);
+    if (pendingRunRef.current) {
+      pendingRunRef.current = false;
+      setTimeout(() => {
+        window.jamo.sendTerminalInput(sessionId, btoa('make run\r'));
+        setRunState('running');
+      }, 500);
+    }
+  }, []);
+
+  const handleRunSessionEnd = useCallback(() => {
+    setRunSessionId(null);
+    setRunState('idle');
+  }, []);
+
+  // The command:
+  // 1. Removes any stale exit-status file
+  // 2. Passes the prompt as a system-prompt addition so it's hidden from the TUI
+  // 3. Short user message triggers execution
+  // 4. Writes exit code to .jamo/.exit_status for polling
+  const CLAUDE_CMD =
+    'rm -f .jamo/.exit_status; claude --append-system-prompt "$(cat .jamo/.prompt)" "Begin."; echo $? > .jamo/.exit_status';
+
+  const sendActionToTerminal = useCallback(async (prompt: string, label: string) => {
+    if (!workspaceId) return;
+
+    // Write the prompt to a hidden file — never shown in terminal.
+    await window.jamo.writeFile(workspaceId, '.jamo/.prompt', prompt);
+    // Clean up any stale exit status.
+    try { await window.jamo.deleteFile(workspaceId, '.jamo/.exit_status'); } catch { /* ignore */ }
+
+    setActiveTerminalTab('claude');
+    setActionStatus('running');
+    setActionLabel(label);
+
+    if (!terminalOpen) {
+      pendingActionRef.current = CLAUDE_CMD;
       setTerminalMounted(true);
       setTerminalOpen(true);
     } else if (terminalSessionId) {
-      window.jamo.sendTerminalInput(terminalSessionId, toBase64(prompt + '\r'));
+      // Ctrl+C to kill any running process, then send the command.
+      window.jamo.sendTerminalInput(terminalSessionId, toBase64('\x03'));
+      setTimeout(() => sendShellCommand(terminalSessionId, CLAUDE_CMD), 200);
     } else {
-      pendingActionRef.current = prompt;
+      pendingActionRef.current = CLAUDE_CMD;
     }
-  }, [terminalOpen, terminalSessionId]);
+  }, [terminalOpen, terminalSessionId, workspaceId]);
 
-  // When terminal session becomes ready and there's a pending action, send it
+  // When terminal session becomes ready and there's a pending action, send it.
   useEffect(() => {
     if (terminalSessionId && pendingActionRef.current) {
-      const prompt = pendingActionRef.current;
+      const cmd = pendingActionRef.current;
       pendingActionRef.current = null;
       const timer = setTimeout(() => {
-        window.jamo.sendTerminalInput(terminalSessionId, toBase64(prompt + '\r'));
-      }, 2000);
+        sendShellCommand(terminalSessionId, cmd);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [terminalSessionId]);
+
+  // Poll .jamo/.exit_status to detect when the action finishes.
+  useEffect(() => {
+    if (actionStatus !== 'running' || !workspaceId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await window.jamo.readFile(workspaceId, '.jamo/.exit_status');
+        const code = parseInt(res.content.trim(), 10);
+        if (!isNaN(code)) {
+          setActionStatus(code === 0 ? 'done' : 'error');
+          setTimeout(() => setActionStatus((s) => (s === 'done' || s === 'error' ? 'idle' : s)), 6000);
+        }
+      } catch {
+        // File doesn't exist yet — action still running.
+      }
+    }, ACTION_POLL_MS);
+
+    return () => clearInterval(interval);
+  }, [actionStatus, workspaceId]);
 
   // Auto-refresh creator panel while terminal is active
   useEffect(() => {
@@ -202,7 +331,8 @@ export default function App() {
         <div className="flex h-screen bg-background text-foreground">
           <WelcomePage
             onOpenFolder={() => openWorkspace()}
-            onCreateProject={createProject}
+            onCreateEmpty={createEmptyProject}
+            onCreateSample={createSampleProject}
             recentWorkspaces={recentWorkspaces}
             onOpenRecent={(path) => openWorkspace(path)}
           />
@@ -219,12 +349,11 @@ export default function App() {
         <ActivityBar activePanel={activePanel} onPanelChange={(p) => setActivePanel(activePanel === p ? null : p)} />
 
         {/* Side Panel */}
-        {activePanel && (
+        {activePanel && activePanel !== 'changes' && (
           <div className="w-60 border-r overflow-hidden shrink-0">
             {activePanel === 'explorer' && <ExplorerPanel workspaceId={workspaceId} />}
             {activePanel === 'creator' && <CreatorPanel workspaceId={workspaceId} activeFile={openFile} onOpenFile={handleOpenCreatorFile} onFileDeleted={handleFileDeleted} refreshKey={creatorRefreshKey} />}
             {activePanel === 'actions' && <ActionsPanel workspaceId={workspaceId} onExecuteAction={sendActionToTerminal} terminalReady={!!terminalSessionId} syncMode={syncMode} onModeChange={handleModeChange} />}
-            {activePanel === 'changes' && <ChangesPanel workspaceId={workspaceId} syncMode={syncMode} lastAction={lastAction} onCommit={handleCommit} />}
           </div>
         )}
 
@@ -237,7 +366,38 @@ export default function App() {
                 ? (findSection(openFile)?.label ?? openFile.split('/').pop()?.replace(/\.json$/, ''))
                 : 'Jamo Studio'}
             </span>
+
+            {/* Action running indicator */}
+            {actionStatus === 'running' && (
+              <span className="flex items-center gap-1.5 text-[11px] text-accent font-medium ml-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
+                </span>
+                {actionLabel}...
+              </span>
+            )}
+
             <div className="flex-1" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRun}
+              title={runState === 'running' ? 'Rerun (make run)' : 'Run (make run)'}
+              className="text-foreground-muted text-[11px] h-7"
+            >
+              {runState === 'running' ? '▶ Rerun' : '▶ Run'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleStop}
+              disabled={runState === 'idle'}
+              title="Stop running process"
+              className="text-foreground-muted text-[11px] h-7"
+            >
+              ■ Stop
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -263,9 +423,11 @@ export default function App() {
 
           {/* Editor + Terminal side-by-side */}
           <div className="flex-1 flex overflow-hidden">
-            {/* Editor */}
+            {/* Editor / Changes */}
             <div className="flex-1 overflow-hidden">
-              {openFile ? (
+              {activePanel === 'changes' ? (
+                <ChangesPanel workspaceId={workspaceId} syncMode={syncMode} lastAction={lastAction} onCommit={handleCommit} />
+              ) : openFile ? (
                 findSection(openFile)?.editorType === 'richtext' ? (
                   <RichTextPanel workspaceId={workspaceId} filePath={openFile} onClose={handleCloseFile} readOnly={syncMode === 'code_mode' && openFile.startsWith('.jamo/creator/')} />
                 ) : (
@@ -281,14 +443,74 @@ export default function App() {
             {/* Terminal (right side - stays mounted once opened to preserve session) */}
             {terminalMounted && (
               <div
-                className={cn('shrink-0 overflow-hidden', !terminalOpen && 'hidden')}
+                className={cn('shrink-0 overflow-hidden flex flex-col', !terminalOpen && 'hidden')}
                 style={{ width: 480 }}
               >
-                <TerminalPanel workspaceId={workspaceId} onClose={() => setTerminalOpen(false)} onSessionReady={handleSessionReady} onSessionEnd={handleSessionEnd} />
+                {/* Tab bar */}
+                <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => setActiveTerminalTab('claude')}
+                    className={cn(
+                      'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
+                      activeTerminalTab === 'claude' ? 'text-foreground bg-background-deep' : 'text-foreground-dim hover:text-foreground-muted',
+                    )}
+                  >
+                    Terminal
+                  </button>
+                  {runTerminalMounted && (
+                    <button
+                      onClick={() => setActiveTerminalTab('run')}
+                      className={cn(
+                        'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
+                        activeTerminalTab === 'run' ? 'text-foreground bg-background-deep' : 'text-foreground-dim hover:text-foreground-muted',
+                      )}
+                    >
+                      Run
+                      {runState === 'running' && <span className="ml-1 text-success">●</span>}
+                    </button>
+                  )}
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => setTerminalOpen(false)}
+                    title="Close terminal"
+                    className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
+                  >
+                    <span className="text-sm leading-none">&times;</span>
+                  </button>
+                </div>
+                {/* Claude terminal */}
+                <div className={cn('flex-1 overflow-hidden', activeTerminalTab !== 'claude' && 'hidden')}>
+                  <TerminalPanel workspaceId={workspaceId} onClose={() => setTerminalOpen(false)} onSessionReady={handleSessionReady} onSessionEnd={handleSessionEnd} showHeader={false} />
+                </div>
+                {/* Run terminal */}
+                {runTerminalMounted && (
+                  <div className={cn('flex-1 overflow-hidden', activeTerminalTab !== 'run' && 'hidden')}>
+                    <RunTerminalPanel workspaceId={workspaceId} onSessionReady={handleRunSessionReady} onSessionEnd={handleRunSessionEnd} />
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
+        {/* Action completion toast */}
+        {(actionStatus === 'done' || actionStatus === 'error') && (
+          <div
+            className={cn(
+              'fixed bottom-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium border',
+              actionStatus === 'done' && 'bg-background border-success/40 text-success',
+              actionStatus === 'error' && 'bg-background border-destructive/40 text-destructive',
+            )}
+          >
+            <span>{actionStatus === 'done' ? '✓' : '✗'}</span>
+            <span>{actionLabel} {actionStatus === 'done' ? 'completed' : 'failed'}</span>
+            <button
+              onClick={() => setActionStatus('idle')}
+              className="ml-2 opacity-60 hover:opacity-100 text-foreground-muted"
+            >
+              &times;
+            </button>
+          </div>
+        )}
       </div>
     </ThemeContext.Provider>
   );

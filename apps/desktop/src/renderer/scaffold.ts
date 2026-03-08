@@ -1,4 +1,4 @@
-// Sample project scaffold: Jamolotl's Personal Portfolio
+// Project scaffolds for Jamo Studio
 
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -13,10 +13,21 @@ interface ScaffoldFile {
   content: object;
 }
 
-export function createPortfolioScaffold(): ScaffoldFile[] {
+interface ScaffoldBinaryFile {
+  path: string;
+  /** URL to fetch the binary content from (e.g. from public dir) */
+  fetchUrl: string;
+}
+
+export interface ScaffoldResult {
+  files: ScaffoldFile[];
+  binaryFiles: ScaffoldBinaryFile[];
+}
+
+export function createPortfolioScaffold(): ScaffoldResult {
   const now = ts();
 
-  return [
+  return { files: [
     // -----------------------------------------------------------------------
     // Section: Main
     // -----------------------------------------------------------------------
@@ -31,7 +42,7 @@ export function createPortfolioScaffold(): ScaffoldFile[] {
           type: 'doc',
           content: [
             { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: "Jamolotl's Portfolio" }] },
-            { type: 'paragraph', content: [{ type: 'text', text: 'A personal portfolio website for Jamolotl, the friendly axolotl mascot of Jamo Studio. The site showcases projects, skills, and a way to get in touch. The vibe is playful yet professional \u2014 approachable and memorable.' }] },
+            { type: 'paragraph', content: [{ type: 'text', text: 'A personal portfolio website for Jamolotl, the friendly axolotl mascot of Jamo Studio. The site showcases projects, skills, and a way to get in touch. The vibe is playful yet professional \u2014 approachable and memorable. A mascot image is provided at assets/jamolotl.png \u2014 use it as the hero avatar and about page photo.' }] },
             { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Goals' }] },
             { type: 'bulletList', content: [
               { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Introduce Jamolotl and their work in a memorable way' }] }] },
@@ -181,9 +192,9 @@ export function createPortfolioScaffold(): ScaffoldFile[] {
           { type: 'text', id: 'home-hero-greeting', x: 100, y: 140, width: 300, height: 30, text: "Hi, I'm Jamolotl!", fontSize: 28, fontFamily: 6, strokeColor: '#E8A0BF', backgroundColor: 'transparent', seed: 104 },
           { type: 'text', id: 'home-hero-tagline', x: 100, y: 185, width: 400, height: 50, text: 'A creative axolotl who builds\ndelightful digital experiences.', fontSize: 18, fontFamily: 6, strokeColor: '#e0e0e0', backgroundColor: 'transparent', seed: 105 },
           { type: 'text', id: 'home-hero-note', x: 100, y: 260, width: 350, height: 22, text: '[CTA button: "See my work" -> /projects]', fontSize: 13, fontFamily: 6, strokeColor: '#7EC8E3', backgroundColor: 'transparent', seed: 106 },
-          // Avatar placeholder
+          // Avatar — use jamolotl.png from assets/
           { type: 'ellipse', id: 'home-avatar', x: 560, y: 150, width: 150, height: 150, strokeColor: '#E8A0BF', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 2, seed: 107 },
-          { type: 'text', id: 'home-avatar-label', x: 592, y: 210, width: 80, height: 22, text: 'Avatar', fontSize: 16, fontFamily: 6, textAlign: 'center', strokeColor: '#e0e0e0', backgroundColor: 'transparent', seed: 108 },
+          { type: 'text', id: 'home-avatar-label', x: 570, y: 210, width: 130, height: 22, text: '[assets/jamolotl.png]', fontSize: 13, fontFamily: 6, textAlign: 'center', strokeColor: '#7EC8E3', backgroundColor: 'transparent', seed: 108 },
 
           // Skills section
           { type: 'rectangle', id: 'home-skills', x: 50, y: 420, width: 700, height: 160, strokeColor: '#e0e0e0', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 1, roundness: { type: 3 }, seed: 109 },
@@ -259,9 +270,9 @@ export function createPortfolioScaffold(): ScaffoldFile[] {
           { type: 'rectangle', id: 'about-section', x: 50, y: 110, width: 700, height: 240, strokeColor: '#e0e0e0', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 1, roundness: { type: 3 }, seed: 303 },
           { type: 'text', id: 'about-title', x: 100, y: 130, width: 200, height: 30, text: 'About Me', fontSize: 28, fontFamily: 6, strokeColor: '#e0e0e0', backgroundColor: 'transparent', seed: 304 },
           { type: 'text', id: 'about-bio', x: 100, y: 175, width: 420, height: 80, text: "I'm Jamolotl, an axolotl who traded\nunderwater caves for code editors.\nI love building tools that make\ncreative work feel effortless.", fontSize: 15, fontFamily: 6, strokeColor: '#e0e0e0', backgroundColor: 'transparent', seed: 305 },
-          // Avatar
+          // Avatar — use jamolotl.png from assets/
           { type: 'ellipse', id: 'about-avatar', x: 580, y: 140, width: 130, height: 130, strokeColor: '#E8A0BF', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 2, seed: 306 },
-          { type: 'text', id: 'about-avatar-label', x: 610, y: 192, width: 70, height: 22, text: 'Photo', fontSize: 15, fontFamily: 6, textAlign: 'center', strokeColor: '#e0e0e0', backgroundColor: 'transparent', seed: 307 },
+          { type: 'text', id: 'about-avatar-label', x: 585, y: 192, width: 120, height: 22, text: '[assets/jamolotl.png]', fontSize: 13, fontFamily: 6, textAlign: 'center', strokeColor: '#7EC8E3', backgroundColor: 'transparent', seed: 307 },
 
           // Contact section
           { type: 'rectangle', id: 'about-contact', x: 50, y: 380, width: 700, height: 220, strokeColor: '#e0e0e0', backgroundColor: 'transparent', fillStyle: 'solid', strokeWidth: 1, roundness: { type: 3 }, seed: 308 },
@@ -283,5 +294,41 @@ export function createPortfolioScaffold(): ScaffoldFile[] {
         appState: {},
       },
     },
-  ];
+  ], binaryFiles: [
+    { path: 'assets/jamolotl.png', fetchUrl: '/jamolotl.png' },
+  ] };
+}
+
+export function createEmptyScaffold(): ScaffoldResult {
+  const now = ts();
+
+  return { files: [
+    {
+      path: '.jamo/creator/_sections/main.json',
+      content: {
+        version: 1,
+        id: uid(),
+        createdAt: now,
+        updatedAt: now,
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Untitled Project' }] },
+            { type: 'paragraph', content: [{ type: 'text', text: 'Describe your project here.' }] },
+          ],
+        },
+      },
+    },
+    {
+      path: '.jamo/creator/home.json',
+      content: {
+        version: 1,
+        id: uid(),
+        createdAt: now,
+        updatedAt: now,
+        elements: [],
+        appState: {},
+      },
+    },
+  ], binaryFiles: [] };
 }

@@ -1,10 +1,18 @@
-import { app, BrowserWindow, Menu, shell, dialog } from 'electron';
+import { app, BrowserWindow, Menu, shell, dialog, nativeImage } from 'electron';
 import * as path from 'path';
 import { startEngine, EngineHandle } from './engine';
 import { createClients } from './grpc-client';
 import { registerIpcHandlers } from './ipc-handlers';
 
 app.name = 'Jamo Studio';
+
+// Set macOS dock icon and name during development
+if (process.platform === 'darwin') {
+  const dockIcon = nativeImage.createFromPath(path.join(__dirname, '..', '..', 'assets', 'icon.png'));
+  if (!dockIcon.isEmpty()) {
+    app.dock.setIcon(dockIcon);
+  }
+}
 
 function buildAppMenu() {
   const isMac = process.platform === 'darwin';
@@ -36,7 +44,7 @@ function buildAppMenu() {
           accelerator: 'CmdOrCtrl+O',
           click: async () => {
             const result = await dialog.showOpenDialog({
-              properties: ['openDirectory'],
+              properties: ['openDirectory', 'createDirectory'],
               title: 'Open Workspace',
             });
             if (!result.canceled && result.filePaths.length > 0) {
@@ -116,6 +124,7 @@ async function createWindow() {
     title: 'Jamo Studio',
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, '..', '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

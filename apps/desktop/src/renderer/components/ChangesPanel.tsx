@@ -69,7 +69,6 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      // Ensure git is initialized before checking status.
       await window.jamo.gitInit(workspaceId);
       const res = await window.jamo.gitStatus(workspaceId);
       setFiles(res.files);
@@ -81,7 +80,6 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
     }
   }, [workspaceId]);
 
-  // Initial load + polling.
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 5000);
@@ -142,101 +140,109 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-3 py-2.5 text-[11px] font-semibold uppercase text-foreground-muted flex items-center">
-        Changes
-        <div className="flex-1" />
-        <button
-          onClick={refresh}
-          className="opacity-50 hover:opacity-100 transition-opacity"
-          title="Refresh"
-        >
-          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-        </button>
-      </div>
-
-      {/* Mode banner */}
-      {banner && (
-        <div className={cn('mx-2 mb-2 px-2.5 py-1.5 text-[11px] rounded border', banner.className)}>
-          {banner.label}
-        </div>
-      )}
-
-      {/* Commit section */}
-      <div className="px-2 mb-2">
-        <textarea
-          value={commitMsg}
-          onChange={(e) => setCommitMsg(e.target.value)}
-          placeholder="Commit message..."
-          rows={3}
-          className="w-full text-[11px] px-2 py-1.5 bg-background-deep border border-border rounded resize-none focus:outline-none focus:border-accent"
-        />
-        <Button
-          onClick={handleCommitClick}
-          disabled={committing || isClean || !commitMsg.trim()}
-          size="sm"
-          className="w-full text-[11px] font-semibold h-7 mt-1 bg-accent hover:bg-accent/90"
-        >
-          {committing ? 'Committing...' : 'Commit'}
-        </Button>
-      </div>
-
-      {/* Changed files list */}
-      <div className="flex-1 overflow-auto px-2 pb-2">
-        {isClean ? (
-          <div className="text-[11px] text-foreground-dim px-1 py-2">
-            No changes
+      {/* Top bar: mode banner + commit controls */}
+      <div className="shrink-0 border-b px-4 py-3">
+        {banner && (
+          <div className={cn('mb-3 px-3 py-2 text-[12px] rounded border', banner.className)}>
+            {banner.label}
           </div>
-        ) : (
-          files.map((file) => {
-            const badge = STATUS_BADGE[file.status] || STATUS_BADGE.modified;
-            const isSelected = selectedFile === file.path;
-            return (
-              <button
-                key={file.path}
-                onClick={() => viewDiff(file.path)}
-                className={cn(
-                  'w-full flex items-center gap-1.5 px-1.5 py-1 text-left rounded text-[11px] hover:bg-accent-bg transition-colors',
-                  isSelected && 'bg-accent-bg',
-                )}
-              >
-                <span className={cn('px-1 rounded text-[10px] font-mono font-bold shrink-0', badge.className)}>
-                  {badge.label}
-                </span>
-                <span className="truncate text-foreground-muted">{file.path}</span>
-              </button>
-            );
-          })
         )}
+        <div className="flex items-center gap-3">
+          <input
+            value={commitMsg}
+            onChange={(e) => setCommitMsg(e.target.value)}
+            placeholder="Commit message..."
+            className="flex-1 text-[13px] px-3 py-1.5 bg-background-deep border border-border rounded focus:outline-none focus:border-accent"
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCommitClick(); } }}
+          />
+          <Button
+            onClick={handleCommitClick}
+            disabled={committing || isClean || !commitMsg.trim()}
+            size="sm"
+            className="text-[13px] font-semibold h-8 px-6 bg-accent hover:bg-accent/90"
+          >
+            {committing ? 'Committing...' : 'Commit'}
+          </Button>
+          <button
+            onClick={refresh}
+            className="opacity-50 hover:opacity-100 transition-opacity p-1"
+            title="Refresh"
+          >
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+          </button>
+        </div>
       </div>
 
-      {/* Diff viewer */}
-      {diffContent !== null && (
-        <div className="border-t max-h-[40%] overflow-auto">
-          <div className="flex items-center px-2 py-1 border-b">
-            <span className="text-[10px] text-foreground-dim truncate flex-1">{selectedFile}</span>
-            <button
-              onClick={() => { setSelectedFile(null); setDiffContent(null); }}
-              className="text-[10px] text-foreground-dim hover:text-foreground ml-2"
-            >
-              Close
-            </button>
+      {/* Main content: file list + diff viewer */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* File list */}
+        <div className="w-72 shrink-0 border-r overflow-auto">
+          <div className="px-3 py-2 text-[11px] font-semibold uppercase text-foreground-muted">
+            Changed Files {!isClean && <span className="text-foreground-dim">({files.length})</span>}
           </div>
-          <pre className="text-[11px] font-mono p-2 leading-tight overflow-x-auto">
-            {diffContent.split('\n').map((line, i) => {
-              let cls = 'text-foreground-dim';
-              if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-green-400';
-              else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-red-400';
-              else if (line.startsWith('@@')) cls = 'text-blue-400';
-              return (
-                <div key={i} className={cls}>
-                  {line}
-                </div>
-              );
-            })}
-          </pre>
+          {isClean ? (
+            <div className="text-[12px] text-foreground-dim px-3 py-2">
+              No changes
+            </div>
+          ) : (
+            <div className="px-1">
+              {files.map((file) => {
+                const badge = STATUS_BADGE[file.status] || STATUS_BADGE.modified;
+                const isSelected = selectedFile === file.path;
+                return (
+                  <button
+                    key={file.path}
+                    onClick={() => viewDiff(file.path)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 text-left rounded text-[12px] hover:bg-accent-bg transition-colors',
+                      isSelected && 'bg-accent-bg',
+                    )}
+                  >
+                    <span className={cn('px-1 rounded text-[10px] font-mono font-bold shrink-0', badge.className)}>
+                      {badge.label}
+                    </span>
+                    <span className="truncate text-foreground-muted">{file.path}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Diff viewer */}
+        <div className="flex-1 overflow-auto">
+          {diffContent !== null ? (
+            <div className="h-full flex flex-col">
+              <div className="flex items-center px-4 py-2 border-b shrink-0">
+                <span className="text-[12px] text-foreground-muted truncate flex-1 font-mono">{selectedFile}</span>
+                <button
+                  onClick={() => { setSelectedFile(null); setDiffContent(null); }}
+                  className="text-[11px] text-foreground-dim hover:text-foreground ml-2"
+                >
+                  Close
+                </button>
+              </div>
+              <pre className="flex-1 text-[13px] font-mono p-4 leading-relaxed overflow-auto">
+                {diffContent.split('\n').map((line, i) => {
+                  let cls = 'text-foreground-dim';
+                  if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-green-400';
+                  else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-red-400';
+                  else if (line.startsWith('@@')) cls = 'text-blue-400';
+                  return (
+                    <div key={i} className={cls}>
+                      {line}
+                    </div>
+                  );
+                })}
+              </pre>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full text-foreground-dim text-[13px]">
+              {isClean ? 'Working tree clean' : 'Select a file to view its diff'}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Sync warning dialog */}
       <AlertDialog open={showSyncWarning} onOpenChange={(open) => { if (!open) { setShowSyncWarning(false); pendingCommitRef.current = false; } }}>

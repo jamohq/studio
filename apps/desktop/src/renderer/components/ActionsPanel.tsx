@@ -128,7 +128,9 @@ Based on ALL of this — sections for project context and page files for UI blue
 
 Follow the patterns and conventions already established in the codebase (framework, styling approach, file structure, naming conventions). Preserve any configuration files (package.json, tsconfig, etc.) — only modify application source code.
 
-Use the tech section for framework/tooling decisions, brand section for styling, user stories for feature requirements, and page blueprints for UI layout and component structure.`;
+Use the tech section for framework/tooling decisions, brand section for styling, user stories for feature requirements, and page blueprints for UI layout and component structure.
+
+Also generate a Makefile at the project root with a \`run\` target that starts the application for local development (e.g., \`npm run dev\`, \`go run .\`, \`python main.py\`).`;
 
 const UPDATE_CODE_PROMPT = `Read all creator files in .jamo/creator/ and the current codebase.
 
@@ -149,7 +151,9 @@ Compare the creator blueprints AND section definitions against the existing code
 - Preserve existing code structure and patterns where possible
 - Only modify files that need changes — don't rewrite files that already match
 
-Use sections as the source of truth for project-level decisions (tech stack, branding, features) and page blueprints as the source of truth for UI layout and component behavior.`;
+Use sections as the source of truth for project-level decisions (tech stack, branding, features) and page blueprints as the source of truth for UI layout and component behavior.
+
+Ensure a Makefile exists at the project root with a \`run\` target that starts the application for local development. Create or update it if needed.`;
 
 // ---------------------------------------------------------------------------
 // Action definitions
@@ -206,7 +210,7 @@ const ACTIONS: ActionDef[] = [
 
 interface ActionsPanelProps {
   workspaceId: string;
-  onExecuteAction: (prompt: string) => void;
+  onExecuteAction: (prompt: string, label: string) => void;
   terminalReady: boolean;
   syncMode: SyncMode;
   onModeChange: (mode: SyncMode, actionId: string) => void;
@@ -261,7 +265,7 @@ export default function ActionsPanel({ workspaceId, onExecuteAction, terminalRea
       onModeChange(action.targetMode, action.id);
     }
 
-    onExecuteAction(action.prompt);
+    onExecuteAction(action.prompt, action.label);
     setSentId(action.id);
     setTimeout(() => setSentId((prev) => (prev === action.id ? null : prev)), 3000);
   }, [workspaceId, onExecuteAction, onModeChange]);
