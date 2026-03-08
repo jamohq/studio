@@ -1,10 +1,10 @@
 import React from 'react';
-import { Code2, Paintbrush, Zap, GitBranch, Sun, Moon } from 'lucide-react';
+import { Code2, Paintbrush, GitBranch, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../theme';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
 
-export type SidePanel = 'explorer' | 'creator' | 'actions' | 'changes';
+export type SidePanel = 'explorer' | 'creator' | 'changes';
 
 interface ActivityBarProps {
   activePanel: SidePanel | null;
@@ -17,7 +17,6 @@ export default function ActivityBar({ activePanel, onPanelChange }: ActivityBarP
   const items: { panel: SidePanel; icon: React.ReactNode; title: string }[] = [
     { panel: 'explorer', icon: <Code2 className="h-[22px] w-[22px]" />, title: 'Files' },
     { panel: 'creator', icon: <Paintbrush className="h-[22px] w-[22px]" />, title: 'Design' },
-    { panel: 'actions', icon: <Zap className="h-[22px] w-[22px]" />, title: 'Build' },
     { panel: 'changes', icon: <GitBranch className="h-[22px] w-[22px]" />, title: 'History' },
   ];
 

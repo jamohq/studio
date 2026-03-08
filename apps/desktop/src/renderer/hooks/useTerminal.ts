@@ -31,6 +31,10 @@ export function useTerminal() {
     setTerminalSessionId(null);
   }, []);
 
+  const mountTerminal = useCallback(() => {
+    setTerminalMounted(true);
+  }, []);
+
   return {
     terminalOpen,
     terminalMounted,
@@ -40,6 +44,7 @@ export function useTerminal() {
     openTerminal,
     closeTerminal,
     toggleTerminal,
+    mountTerminal,
     handleSessionReady,
     handleSessionEnd,
   };

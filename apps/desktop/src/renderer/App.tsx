@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Theme, ThemeContext } from './theme';
 import WelcomePage from './components/WelcomePage';
 import ActivityBar, { SidePanel } from './components/ActivityBar';
@@ -8,18 +8,19 @@ import CanvasPanel from './canvas/CanvasPanel';
 import RichTextPanel from './richtext/RichTextPanel';
 import TerminalPanel from './components/TerminalPanel';
 import RunTerminalPanel from './components/RunTerminalPanel';
-import ActionsPanel from './components/ActionsPanel';
 import ChangesPanel from './components/ChangesPanel';
 import CodeEditorPanel from './codeeditor/CodeEditorPanel';
-import ProgressOverlay from './components/ProgressOverlay';
 import OnboardingOverlay from './components/OnboardingOverlay';
-import { ToastProvider } from './components/Toast';
-import { useSyncStatus } from './hooks/useSyncStatus';
+import { ToastProvider, useToast } from './components/Toast';
+import type { ActionStatus } from './hooks/useActionRunner';
+import { useChangeTracking } from './hooks/useChangeTracking';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTerminal } from './hooks/useTerminal';
 import { useActionRunner } from './hooks/useActionRunner';
 import { useRunTerminal } from './hooks/useRunTerminal';
 import { useResizable } from './hooks/useResizable';
+import { useActivityFeed } from './hooks/useActivityFeed';
+import ActivityPanel from './components/ActivityPanel';
 import { findSection } from './sections';
 import { Button } from './components/ui/button';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,26 @@ import { cn } from '@/lib/utils';
 const CREATOR_REFRESH_INTERVAL_MS = 3000;
 
 const ONBOARDING_KEY = 'jamo-has-seen-onboarding';
+
+/** Fires a toast when an action completes or errors. Must be rendered inside ToastProvider. */
+function ActionToast({ status, label }: { status: ActionStatus; label: string }) {
+  const { toast } = useToast();
+  const prevStatus = useRef<ActionStatus>('idle');
+
+  useEffect(() => {
+    const prev = prevStatus.current;
+    prevStatus.current = status;
+    if (prev !== 'running') return;
+
+    if (status === 'done') {
+      toast({ title: label, description: 'Completed successfully', variant: 'success' });
+    } else if (status === 'error') {
+      toast({ title: label, description: 'Something went wrong — check terminal output', variant: 'error' });
+    }
+  }, [status, label, toast]);
+
+  return null;
+}
 
 /** Shared resize handle component. */
 function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
@@ -70,14 +91,12 @@ export default function App() {
   const sidebar = useResizable({ defaultWidth: 240, minWidth: 160, maxWidth: 600, storageKey: 'jamo-sidebar-width' });
   const terminalResize = useResizable({ defaultWidth: 480, minWidth: 200, maxWidth: 900, storageKey: 'jamo-terminal-width' });
 
-  // -- Sync status ------------------------------------------------------------
-  const { mode: syncMode, lastAction, setMode: setSyncMode } = useSyncStatus(workspace.workspaceId);
+  // -- Change tracking (replaces useSyncStatus) -------------------------------
+  const changeTracking = useChangeTracking(workspace.workspaceId);
 
-  const handleModeChange = useCallback(
-    (mode: 'synced' | 'creator_mode' | 'code_mode', actionId: string) => setSyncMode(mode, actionId),
-    [setSyncMode],
-  );
-  const handleCommit = useCallback(() => setSyncMode('synced', null), [setSyncMode]);
+  const handleCommit = useCallback(() => {
+    changeTracking.resetAfterCommit();
+  }, [changeTracking.resetAfterCommit]);
 
   // -- Terminal ---------------------------------------------------------------
   const terminal = useTerminal();
@@ -90,21 +109,25 @@ export default function App() {
     terminal.openTerminal,
   );
 
+  // -- Activity feed -----------------------------------------------------------
+  const activityFeed = useActivityFeed(workspace.workspaceId, actionStatus, actionLabel);
+
+  // Mark action ran when it completes successfully.
+  useEffect(() => {
+    if (actionStatus === 'done') {
+      changeTracking.markActionRan();
+    }
+  }, [actionStatus, changeTracking.markActionRan]);
+
   // -- Run terminal -----------------------------------------------------------
   const run = useRunTerminal(terminal.terminalOpen, terminal.openTerminal);
 
-  // -- Progress overlay (hide terminal by default during actions) --------------
-  const [showTerminalManually, setShowTerminalManually] = useState(false);
-  const showProgressOverlay = actionStatus === 'running' || (actionStatus === 'done' && !showTerminalManually) || (actionStatus === 'error' && !showTerminalManually);
-
+  // -- Mount terminal (hidden) when action starts so session stays alive ------
   useEffect(() => {
-    if (actionStatus === 'running') setShowTerminalManually(false);
-  }, [actionStatus]);
-
-  const handleShowDetails = useCallback(() => {
-    setShowTerminalManually(true);
-    terminal.openTerminal('claude');
-  }, [terminal]);
+    if (actionStatus === 'running') {
+      terminal.mountTerminal();
+    }
+  }, [actionStatus, terminal.mountTerminal]);
 
   // -- Auto-refresh design panel while terminal is active ---------------------
   useEffect(() => {
@@ -122,6 +145,10 @@ export default function App() {
     localStorage.setItem(ONBOARDING_KEY, '1');
     setShowOnboarding(false);
   }, []);
+
+  // -- Action props shared by CreatorPanel and ExplorerPanel -------------------
+  const actionRunning = actionStatus === 'running';
+  const terminalReady = !!terminal.terminalSessionId;
 
   // -- No workspace → welcome screen -----------------------------------------
   if (!workspace.workspaceId) {
@@ -143,7 +170,9 @@ export default function App() {
   }
 
   const showSidebar = activePanel && activePanel !== 'changes';
-  const showTerminal = terminal.terminalMounted && terminal.terminalOpen;
+  const showActivityPanel = activityFeed.visible;
+  const showTerminalPanel = terminal.terminalMounted && terminal.terminalOpen && !showActivityPanel;
+  const showRightPanel = showActivityPanel || showTerminalPanel;
 
   // -- Main layout ------------------------------------------------------------
   return (
@@ -186,7 +215,7 @@ export default function App() {
               <Button variant="ghost" size="sm" onClick={() => workspace.openWorkspace()} title="Open Project" className="text-foreground-muted text-[11px] h-7">
                 Open Project
               </Button>
-              <Button variant="outline" size="sm" onClick={terminal.toggleTerminal} title={terminal.terminalOpen ? 'Close terminal' : 'Open terminal'} className={cn('text-[11px] h-7', terminal.terminalOpen && 'text-accent')}>
+              <Button variant="outline" size="sm" onClick={() => { if (showActivityPanel) { activityFeed.dismiss(); terminal.openTerminal(); } else { terminal.toggleTerminal(); } }} title={terminal.terminalOpen ? 'Close terminal' : 'Open terminal'} className={cn('text-[11px] h-7', (terminal.terminalOpen || showActivityPanel) && 'text-accent')}>
                 Terminal
               </Button>
             </div>
@@ -197,7 +226,17 @@ export default function App() {
               {showSidebar && (
                 <>
                   <div className="shrink-0 overflow-hidden border-r" style={{ width: sidebar.width }}>
-                    {activePanel === 'explorer' && <ExplorerPanel workspaceId={workspace.workspaceId} onOpenFile={workspace.handleOpenFile} />}
+                    {activePanel === 'explorer' && (
+                      <ExplorerPanel
+                        workspaceId={workspace.workspaceId}
+                        onOpenFile={workspace.handleOpenFile}
+                        onFileDeleted={workspace.handleFileDeleted}
+                        activeFile={workspace.openFile}
+                        onExecuteAction={sendActionToTerminal}
+                        terminalReady={terminalReady}
+                        actionRunning={actionRunning}
+                      />
+                    )}
                     {activePanel === 'creator' && (
                       <CreatorPanel
                         workspaceId={workspace.workspaceId}
@@ -205,15 +244,9 @@ export default function App() {
                         onOpenFile={workspace.handleOpenCreatorFile}
                         onFileDeleted={workspace.handleFileDeleted}
                         refreshKey={workspace.creatorRefreshKey}
-                      />
-                    )}
-                    {activePanel === 'actions' && (
-                      <ActionsPanel
-                        workspaceId={workspace.workspaceId}
                         onExecuteAction={sendActionToTerminal}
-                        terminalReady={!!terminal.terminalSessionId}
-                        syncMode={syncMode}
-                        onModeChange={handleModeChange}
+                        terminalReady={terminalReady}
+                        actionRunning={actionRunning}
                       />
                     )}
                   </div>
@@ -221,118 +254,122 @@ export default function App() {
                 </>
               )}
 
-              {/* Editor / Changes / Progress overlay */}
+              {/* Editor / Changes */}
               <div className="flex-1 overflow-hidden relative min-w-0">
-                {showProgressOverlay && !showTerminalManually && (
-                  <ProgressOverlay
-                    visible
-                    label={actionLabel}
-                    onShowDetails={handleShowDetails}
-                    status={actionStatus}
+                {activePanel === 'changes' ? (
+                  <ChangesPanel
+                    workspaceId={workspace.workspaceId}
+                    files={changeTracking.files}
+                    isClean={changeTracking.isClean}
+                    loading={changeTracking.loading}
+                    derivedMode={changeTracking.derivedMode}
+                    actionRanSinceLastCommit={changeTracking.actionRanSinceLastCommit}
+                    onCommit={handleCommit}
+                    onRefresh={changeTracking.refresh}
                   />
-                )}
-
-                {(!showProgressOverlay || showTerminalManually) && (
-                  activePanel === 'changes' ? (
-                    <ChangesPanel
+                ) : workspace.openFile ? (
+                  findSection(workspace.openFile)?.editorType === 'richtext' ? (
+                    <RichTextPanel
                       workspaceId={workspace.workspaceId}
-                      syncMode={syncMode}
-                      lastAction={lastAction}
-                      onCommit={handleCommit}
+                      filePath={workspace.openFile}
+                      onClose={workspace.handleCloseFile}
                     />
-                  ) : workspace.openFile ? (
-                    findSection(workspace.openFile)?.editorType === 'richtext' ? (
-                      <RichTextPanel
-                        workspaceId={workspace.workspaceId}
-                        filePath={workspace.openFile}
-                        onClose={workspace.handleCloseFile}
-                        readOnly={syncMode === 'code_mode' && workspace.openFile.startsWith('.jamo/creator/')}
-                      />
-                    ) : workspace.openFile.startsWith('.jamo/creator/') ? (
-                      <CanvasPanel
-                        workspaceId={workspace.workspaceId}
-                        filePath={workspace.openFile}
-                        onClose={workspace.handleCloseFile}
-                        onFileRenamed={workspace.handleFileRenamed}
-                        readOnly={syncMode === 'code_mode'}
-                      />
-                    ) : (
-                      <CodeEditorPanel
-                        workspaceId={workspace.workspaceId}
-                        filePath={workspace.openFile}
-                        onClose={workspace.handleCloseFile}
-                        readOnly={syncMode === 'creator_mode'}
-                      />
-                    )
+                  ) : workspace.openFile.startsWith('.jamo/creator/') ? (
+                    <CanvasPanel
+                      workspaceId={workspace.workspaceId}
+                      filePath={workspace.openFile}
+                      onClose={workspace.handleCloseFile}
+                      onFileRenamed={workspace.handleFileRenamed}
+                    />
                   ) : (
-                    <div className="flex items-center justify-center h-full text-foreground-dim text-[13px]">
-                      Select a file from the sidebar to get started
-                    </div>
+                    <CodeEditorPanel
+                      workspaceId={workspace.workspaceId}
+                      filePath={workspace.openFile}
+                      onClose={workspace.handleCloseFile}
+                    />
                   )
+                ) : (
+                  <div className="flex items-center justify-center h-full text-foreground-dim text-[13px]">
+                    Select a file from the sidebar to get started
+                  </div>
                 )}
               </div>
 
-              {/* Terminal (right side) */}
-              {showTerminal && (
+              {/* Right panel: Activity or Terminal */}
+              {showRightPanel && (
                 <>
                   <ResizeHandle onMouseDown={(e) => terminalResize.startDrag(e, -1)} />
                   <div className="shrink-0 overflow-hidden flex flex-col" style={{ width: terminalResize.width }}>
-                    {/* Tab bar */}
-                    <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => terminal.setActiveTerminalTab('claude')}
-                        className={cn(
-                          'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
-                          terminal.activeTerminalTab === 'claude'
-                            ? 'text-foreground bg-background-deep'
-                            : 'text-foreground-dim hover:text-foreground-muted',
-                        )}
-                      >
-                        Terminal
-                      </button>
-                      {run.runTerminalMounted && (
-                        <button
-                          onClick={() => terminal.setActiveTerminalTab('run')}
-                          className={cn(
-                            'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
-                            terminal.activeTerminalTab === 'run'
-                              ? 'text-foreground bg-background-deep'
-                              : 'text-foreground-dim hover:text-foreground-muted',
-                          )}
-                        >
-                          Run
-                          {run.runState === 'running' && <span className="ml-1 text-success">●</span>}
-                        </button>
-                      )}
-                      <div className="flex-1" />
-                      <button
-                        onClick={terminal.closeTerminal}
-                        title="Close terminal"
-                        className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
-                      >
-                        <span className="text-sm leading-none">&times;</span>
-                      </button>
-                    </div>
-
-                    {/* Claude terminal */}
-                    <div className={cn('flex-1 overflow-hidden', terminal.activeTerminalTab !== 'claude' && 'hidden')}>
-                      <TerminalPanel
-                        workspaceId={workspace.workspaceId}
-                        onClose={terminal.closeTerminal}
-                        onSessionReady={terminal.handleSessionReady}
-                        onSessionEnd={terminal.handleSessionEnd}
-                        showHeader={false}
+                    {showActivityPanel && (
+                      <ActivityPanel
+                        entries={activityFeed.entries}
+                        phase={activityFeed.phase}
+                        summaryMessage={activityFeed.summaryMessage}
+                        actionLabel={actionLabel}
+                        onFileClick={workspace.handleOpenFile}
+                        onDismiss={activityFeed.dismiss}
                       />
-                    </div>
+                    )}
+                    {terminal.terminalMounted && (
+                      <div className={cn('flex-1 flex flex-col overflow-hidden', showActivityPanel && 'hidden')}>
+                        {/* Tab bar */}
+                        <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => terminal.setActiveTerminalTab('claude')}
+                            className={cn(
+                              'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
+                              terminal.activeTerminalTab === 'claude'
+                                ? 'text-foreground bg-background-deep'
+                                : 'text-foreground-dim hover:text-foreground-muted',
+                            )}
+                          >
+                            Terminal
+                          </button>
+                          {run.runTerminalMounted && (
+                            <button
+                              onClick={() => terminal.setActiveTerminalTab('run')}
+                              className={cn(
+                                'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
+                                terminal.activeTerminalTab === 'run'
+                                  ? 'text-foreground bg-background-deep'
+                                  : 'text-foreground-dim hover:text-foreground-muted',
+                              )}
+                            >
+                              Run
+                              {run.runState === 'running' && <span className="ml-1 text-success">●</span>}
+                            </button>
+                          )}
+                          <div className="flex-1" />
+                          <button
+                            onClick={terminal.closeTerminal}
+                            title="Close terminal"
+                            className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
+                          >
+                            <span className="text-sm leading-none">&times;</span>
+                          </button>
+                        </div>
 
-                    {/* Run terminal */}
-                    {run.runTerminalMounted && (
-                      <div className={cn('flex-1 overflow-hidden', terminal.activeTerminalTab !== 'run' && 'hidden')}>
-                        <RunTerminalPanel
-                          workspaceId={workspace.workspaceId}
-                          onSessionReady={run.handleRunSessionReady}
-                          onSessionEnd={run.handleRunSessionEnd}
-                        />
+                        {/* Claude terminal */}
+                        <div className={cn('flex-1 overflow-hidden', terminal.activeTerminalTab !== 'claude' && 'hidden')}>
+                          <TerminalPanel
+                            workspaceId={workspace.workspaceId}
+                            onClose={terminal.closeTerminal}
+                            onSessionReady={terminal.handleSessionReady}
+                            onSessionEnd={terminal.handleSessionEnd}
+                            showHeader={false}
+                          />
+                        </div>
+
+                        {/* Run terminal */}
+                        {run.runTerminalMounted && (
+                          <div className={cn('flex-1 overflow-hidden', terminal.activeTerminalTab !== 'run' && 'hidden')}>
+                            <RunTerminalPanel
+                              workspaceId={workspace.workspaceId}
+                              onSessionReady={run.handleRunSessionReady}
+                              onSessionEnd={run.handleRunSessionEnd}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -341,6 +378,9 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        {/* Action completion toast */}
+        <ActionToast status={actionStatus} label={actionLabel} />
 
         {/* First-run onboarding */}
         {showOnboarding && <OnboardingOverlay onComplete={handleOnboardingComplete} />}

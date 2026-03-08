@@ -26,9 +26,15 @@ const CTRL_C_DELAY_MS = 200;
 /** Duration (ms) to show the completion status before resetting to idle. */
 const STATUS_RESET_DELAY_MS = 6000;
 
-/** The shell command that runs Claude with the hidden prompt file. */
+/** The shell command to execute the wrapper script and capture exit status. */
 const CLAUDE_CMD =
-  'rm -f .jamo/.exit_status; claude --append-system-prompt "$(cat .jamo/.prompt)" "Begin."; echo $? > .jamo/.exit_status';
+  'rm -f .jamo/.exit_status .jamo/.output; bash .jamo/.run.sh; printf "%d\\n" "$?" > .jamo/.exit_status';
+
+/** Content of the wrapper script written before launching the action.
+ *  Uses -p (print mode) so claude exits after completing instead of waiting for input.
+ *  Pipes through tee to capture output; pipefail ensures claude's exit code is preserved. */
+const RUN_SCRIPT =
+  '#!/bin/bash\nset -o pipefail\nclaude -p --append-system-prompt "$(cat .jamo/.prompt)" "Begin." | tee .jamo/.output\n';
 
 export type ActionStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -45,8 +51,9 @@ export function useActionRunner(
   const sendActionToTerminal = useCallback(async (prompt: string, label: string) => {
     if (!workspaceId) return;
 
-    // Write prompt to hidden file.
+    // Write prompt and wrapper script to hidden files.
     await window.jamo.writeFile(workspaceId, '.jamo/.prompt', prompt);
+    await window.jamo.writeFile(workspaceId, '.jamo/.run.sh', RUN_SCRIPT);
     try { await window.jamo.deleteFile(workspaceId, '.jamo/.exit_status'); } catch { /* ignore */ }
 
     setActionStatus('running');
@@ -79,9 +86,16 @@ export function useActionRunner(
 
     const interval = setInterval(async () => {
       try {
+        // List .jamo/ first to check if .exit_status exists, avoiding noisy
+        // gRPC NotFound errors that Electron logs for rejected ipcMain handles.
+        const dir = await window.jamo.listDirectory(workspaceId, '.jamo');
+        if (!dir.entries.some((e) => e.name === '.exit_status')) return;
+
         const res = await window.jamo.readFile(workspaceId, '.jamo/.exit_status');
-        const code = parseInt(res.content.trim(), 10);
-        if (!isNaN(code)) {
+        // Extract first sequence of digits from the file (handles trailing newlines, whitespace, escape chars).
+        const match = res.content.match(/(\d+)/);
+        if (match) {
+          const code = parseInt(match[1], 10);
           setActionStatus(code === 0 ? 'done' : 'error');
           setTimeout(
             () => setActionStatus((s) => (s === 'done' || s === 'error' ? 'idle' : s)),
@@ -89,7 +103,7 @@ export function useActionRunner(
           );
         }
       } catch {
-        // File doesn't exist yet — action still running.
+        // Directory or file not readable — action still running.
       }
     }, ACTION_POLL_MS);
 

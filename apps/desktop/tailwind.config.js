@@ -21,6 +21,10 @@ module.exports = {
           DEFAULT: 'hsl(var(--accent))',
           bg: 'hsl(var(--accent-bg))',
         },
+        popover: {
+          DEFAULT: 'hsl(var(--background-surface))',
+          foreground: 'hsl(var(--foreground))',
+        },
         destructive: 'hsl(var(--destructive))',
         success: 'hsl(var(--success))',
         warning: 'hsl(var(--warning))',

@@ -13,7 +13,7 @@ import {
 } from './ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useToast } from './Toast';
-import type { SyncMode } from '../hooks/useSyncStatus';
+import type { DerivedMode } from '../hooks/useChangeTracking';
 import type { ChangedFile } from '../../shared/types';
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
@@ -24,36 +24,25 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   renamed: { label: 'R', className: 'bg-purple-500/20 text-purple-400' },
 };
 
-const MODE_BANNER: Record<string, { label: string; className: string }> = {
-  creator_mode: {
-    label: 'Designing — review changes and save',
-    className: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
-  },
-  code_mode: {
-    label: 'Building — review changes and save',
-    className: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
-  },
-};
-
-const PREFILL_MESSAGES: Record<string, string> = {
-  'generate-creator': 'Generate designs from codebase',
-  'update-creator': 'Update designs to match codebase',
-  'generate-code': 'Generate code from designs',
-  'update-code': 'Update code to match designs',
+const SYNC_WARNINGS: Record<string, string> = {
+  design_changed: "Design changes haven't been reflected in code. Continue only if the code already has this info.",
+  code_changed: "Code changes haven't been reflected in designs. Continue only if the designs already have this info.",
+  mixed: 'Both design and code changed without syncing.',
 };
 
 interface ChangesPanelProps {
   workspaceId: string;
-  syncMode: SyncMode;
-  lastAction: string | null;
+  files: ChangedFile[];
+  isClean: boolean;
+  loading: boolean;
+  derivedMode: DerivedMode;
+  actionRanSinceLastCommit: boolean;
   onCommit: () => void;
+  onRefresh: () => void;
 }
 
-export default function ChangesPanel({ workspaceId, syncMode, lastAction, onCommit }: ChangesPanelProps) {
+export default function ChangesPanel({ workspaceId, files, isClean, loading, derivedMode, actionRanSinceLastCommit, onCommit, onRefresh }: ChangesPanelProps) {
   const { toast } = useToast();
-  const [files, setFiles] = useState<ChangedFile[]>([]);
-  const [isClean, setIsClean] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [commitMsg, setCommitMsg] = useState('');
   const [committing, setCommitting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -61,33 +50,6 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
   const [showSyncWarning, setShowSyncWarning] = useState(false);
   const pendingCommitRef = useRef(false);
   const [revertTarget, setRevertTarget] = useState<{ label: string; paths: string[] } | null>(null);
-
-  // Pre-fill commit message based on last action.
-  useEffect(() => {
-    if (lastAction && PREFILL_MESSAGES[lastAction]) {
-      setCommitMsg(PREFILL_MESSAGES[lastAction]);
-    }
-  }, [lastAction]);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      await window.jamo.gitInit(workspaceId);
-      const res = await window.jamo.gitStatus(workspaceId);
-      setFiles(res.files);
-      setIsClean(res.isClean);
-    } catch (err) {
-      console.error('Failed to get git status:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [workspaceId]);
-
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 5000);
-    return () => clearInterval(interval);
-  }, [refresh]);
 
   const viewDiff = useCallback(async (filePath: string) => {
     setSelectedFile(filePath);
@@ -110,26 +72,32 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
       setSelectedFile(null);
       setDiffContent(null);
       onCommit();
-      refresh();
+      onRefresh();
     } catch (err: any) {
       console.error('Commit failed:', err);
       toast({ title: 'Save failed', description: err?.message || String(err), variant: 'error' });
     } finally {
       setCommitting(false);
     }
-  }, [workspaceId, commitMsg, onCommit, refresh]);
+  }, [workspaceId, commitMsg, onCommit, onRefresh]);
 
   const handleCommitClick = useCallback(() => {
-    if (syncMode === 'synced') {
-      const hasCreatorChanges = files.some((f) => f.path.startsWith('.jamo/creator/'));
-      if (hasCreatorChanges) {
-        setShowSyncWarning(true);
-        pendingCommitRef.current = true;
-        return;
-      }
+    // If an action ran successfully since last commit, no warning needed.
+    if (actionRanSinceLastCommit) {
+      doCommit();
+      return;
     }
+
+    // Warn if there are unsynced changes.
+    const warning = SYNC_WARNINGS[derivedMode];
+    if (warning) {
+      setShowSyncWarning(true);
+      pendingCommitRef.current = true;
+      return;
+    }
+
     doCommit();
-  }, [syncMode, files, doCommit]);
+  }, [actionRanSinceLastCommit, derivedMode, doCommit]);
 
   const handleWarningConfirm = useCallback(() => {
     setShowSyncWarning(false);
@@ -160,24 +128,17 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
       setRevertTarget(null);
       setSelectedFile(null);
       setDiffContent(null);
-      refresh();
+      onRefresh();
     } catch (err: any) {
       toast({ title: 'Revert failed', description: err?.message || String(err), variant: 'error' });
       setRevertTarget(null);
     }
-  }, [workspaceId, revertTarget, refresh, toast]);
-
-  const banner = MODE_BANNER[syncMode];
+  }, [workspaceId, revertTarget, onRefresh, toast]);
 
   return (
     <div className="flex flex-col h-full">
-      {/* Top bar: mode banner + commit controls */}
+      {/* Top bar: commit controls */}
       <div className="shrink-0 border-b px-4 py-3">
-        {banner && (
-          <div className={cn('mb-3 px-3 py-2 text-[12px] rounded border', banner.className)}>
-            {banner.label}
-          </div>
-        )}
         <div className="flex items-center gap-3">
           <input
             value={commitMsg}
@@ -195,7 +156,7 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
             {committing ? 'Saving...' : 'Save'}
           </Button>
           <button
-            onClick={refresh}
+            onClick={onRefresh}
             className="opacity-50 hover:opacity-100 transition-opacity p-1"
             title="Refresh"
           >
@@ -328,13 +289,13 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
           <AlertDialogHeader>
             <AlertDialogTitle>Save without syncing?</AlertDialogTitle>
             <AlertDialogDescription>
-              You're saving design changes without updating code. Only do this if you're manually fixing AI output.
+              {SYNC_WARNINGS[derivedMode] || 'You have unsynced changes.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleWarningConfirm}>
-              Continue
+              Continue anyway
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

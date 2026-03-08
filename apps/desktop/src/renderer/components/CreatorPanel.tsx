@@ -3,6 +3,16 @@ import { FolderPlus, FilePlus, Diamond } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -20,6 +30,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from './Toast';
 import { SECTIONS, SECTIONS_DIR } from '../sections';
+import { GENERATE_CODE_PROMPT, UPDATE_CODE_PROMPT } from '../prompts';
 import type { FileEntry } from '../../shared/types';
 
 const CREATOR_DIR = '.jamo/creator';
@@ -39,6 +50,9 @@ interface CreatorPanelProps {
   onOpenFile: (relPath: string) => void;
   onFileDeleted?: (relPath: string) => void;
   refreshKey?: number;
+  onExecuteAction?: (prompt: string, label: string) => void;
+  terminalReady?: boolean;
+  actionRunning?: boolean;
 }
 
 /** Strip .json for display */
@@ -49,7 +63,7 @@ function nameFromFile(filename: string): string {
 // ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
-export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFileDeleted, refreshKey }: CreatorPanelProps) {
+export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFileDeleted, refreshKey, onExecuteAction, terminalReady, actionRunning }: CreatorPanelProps) {
   const { toast } = useToast();
   const [nodes, setNodes] = useState<CreatorNode[]>([]);
   const nodesRef = useRef<CreatorNode[]>([]);
@@ -349,6 +363,52 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
   };
 
   // -----------------------------------------------------------------------
+  // Build Code (Design → Code)
+  // -----------------------------------------------------------------------
+  const [confirmBuild, setConfirmBuild] = useState<{ onConfirm: () => void } | null>(null);
+
+  const handleDesignToCode = useCallback(async () => {
+    if (!onExecuteAction) return;
+
+    // Check if design files exist.
+    try {
+      const res = await window.jamo.listDirectory(workspaceId, '.jamo/creator');
+      const hasJson = res.entries.some((e: any) => e.name.endsWith('.json'));
+      if (!hasJson) {
+        toast({ title: 'No design files found', description: 'Create designs in the Design panel first.', variant: 'error' });
+        return;
+      }
+    } catch {
+      toast({ title: 'No design files found', description: 'Create designs in the Design panel first.', variant: 'error' });
+      return;
+    }
+
+    // Detect: are there source files already? If yes → update, if no → generate.
+    let hasSourceFiles = false;
+    try {
+      const res = await window.jamo.listDirectory(workspaceId, '');
+      hasSourceFiles = res.entries.some((e: any) => e.name !== '.jamo' && e.name !== '.git' && e.name !== '.gitignore');
+    } catch { /* ignore */ }
+
+    const isGenerate = !hasSourceFiles;
+    const prompt = isGenerate ? GENERATE_CODE_PROMPT : UPDATE_CODE_PROMPT;
+    const label = isGenerate ? 'Generating code' : 'Updating code';
+
+    const execute = async () => {
+      try { await window.jamo.gitInit(workspaceId); } catch { /* ignore */ }
+      onExecuteAction(prompt, label);
+    };
+
+    if (isGenerate) {
+      setConfirmBuild({
+        onConfirm: () => { setConfirmBuild(null); execute(); },
+      });
+    } else {
+      execute();
+    }
+  }, [workspaceId, onExecuteAction, toast]);
+
+  // -----------------------------------------------------------------------
   // Render node
   // -----------------------------------------------------------------------
   const renderNode = (node: CreatorNode, depth: number) => {
@@ -509,6 +569,38 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
         )}
         {nodes.map((node) => renderNode(node, 0))}
       </div>
+
+      {/* Build Code footer */}
+      {onExecuteAction && (
+        <div className="shrink-0 border-t px-3 py-2.5">
+          <Button
+            onClick={handleDesignToCode}
+            disabled={actionRunning}
+            size="sm"
+            className="w-full text-[11px] font-semibold h-8 bg-accent hover:bg-accent/90"
+          >
+            {actionRunning ? 'Running...' : 'Build Code'}
+          </Button>
+        </div>
+      )}
+
+      {/* Build Code confirmation dialog */}
+      <AlertDialog open={!!confirmBuild} onOpenChange={(open) => { if (!open) setConfirmBuild(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Design → Code</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will generate application code from your designs. Existing source files may be overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBuild?.onConfirm} className="bg-accent text-white hover:bg-accent/90">
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* New file dialog */}
       <Dialog open={!!newFileParent} onOpenChange={(open) => { if (!open) setNewFileParent(null); }}>
