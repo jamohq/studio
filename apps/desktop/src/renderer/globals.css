@@ -50,6 +50,14 @@
   }
 }
 
+/* CodeMirror editor */
+.cm-editor {
+  height: 100%;
+}
+.cm-editor .cm-scroller {
+  overflow: auto;
+}
+
 /* Rich text editor (tiptap / ProseMirror) */
 .rich-text-editor .ProseMirror {
   @apply text-foreground text-sm leading-relaxed;

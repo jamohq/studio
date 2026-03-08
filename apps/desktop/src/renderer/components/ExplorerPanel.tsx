@@ -3,6 +3,7 @@ import type { FileEntry } from '../../shared/types';
 
 interface ExplorerPanelProps {
   workspaceId: string;
+  onOpenFile?: (relPath: string) => void;
 }
 
 interface TreeNode {
@@ -13,7 +14,7 @@ interface TreeNode {
   loaded?: boolean;
 }
 
-export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
+export default function ExplorerPanel({ workspaceId, onOpenFile }: ExplorerPanelProps) {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +92,8 @@ export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
     return (
       <React.Fragment key={node.path}>
         <div
-          onClick={() => isDir && toggleDir(node.path)}
-          className="py-[3px] px-2 text-xs text-foreground flex items-center gap-1"
+          onClick={() => isDir ? toggleDir(node.path) : onOpenFile?.(node.path)}
+          className="py-[3px] px-2 text-xs text-foreground flex items-center gap-1 cursor-pointer hover:bg-accent-bg/50"
           style={{ paddingLeft: 12 + depth * 16 }}
         >
           {isDir ? (
@@ -102,7 +103,7 @@ export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
           ) : (
             <span className="w-3" />
           )}
-          <span>{node.entry.name}</span>
+          <span className="truncate">{node.entry.name}</span>
         </div>
         {isDir && node.expanded && node.children?.map((child) => renderNode(child, depth + 1))}
       </React.Fragment>
@@ -112,7 +113,7 @@ export default function ExplorerPanel({ workspaceId }: ExplorerPanelProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 py-2.5 text-[11px] font-semibold uppercase text-foreground-muted">
-        Explorer
+        Files
       </div>
       <div className="flex-1 overflow-auto pb-2">
         {loading && <div className="px-3 py-2 text-xs text-foreground-muted">Loading...</div>}

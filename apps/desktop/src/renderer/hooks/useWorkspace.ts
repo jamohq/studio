@@ -90,6 +90,10 @@ export function useWorkspace() {
     return scaffoldAndOpen(dirPath, createPortfolioScaffold());
   }, [scaffoldAndOpen]);
 
+  const handleOpenFile = useCallback((relPath: string) => {
+    setOpenFile(relPath);
+  }, []);
+
   const handleOpenCreatorFile = useCallback((relPath: string) => {
     setOpenFile(relPath);
   }, []);
@@ -124,6 +128,7 @@ export function useWorkspace() {
     openWorkspace,
     createEmptyProject,
     createSampleProject,
+    handleOpenFile,
     handleOpenCreatorFile,
     handleCloseFile,
     handleFileRenamed,

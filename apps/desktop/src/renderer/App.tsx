@@ -10,6 +10,7 @@ import TerminalPanel from './components/TerminalPanel';
 import RunTerminalPanel from './components/RunTerminalPanel';
 import ActionsPanel from './components/ActionsPanel';
 import ChangesPanel from './components/ChangesPanel';
+import CodeEditorPanel from './codeeditor/CodeEditorPanel';
 import ProgressOverlay from './components/ProgressOverlay';
 import OnboardingOverlay from './components/OnboardingOverlay';
 import { ToastProvider } from './components/Toast';
@@ -196,7 +197,7 @@ export default function App() {
               {showSidebar && (
                 <>
                   <div className="shrink-0 overflow-hidden border-r" style={{ width: sidebar.width }}>
-                    {activePanel === 'explorer' && <ExplorerPanel workspaceId={workspace.workspaceId} />}
+                    {activePanel === 'explorer' && <ExplorerPanel workspaceId={workspace.workspaceId} onOpenFile={workspace.handleOpenFile} />}
                     {activePanel === 'creator' && (
                       <CreatorPanel
                         workspaceId={workspace.workspaceId}
@@ -247,13 +248,20 @@ export default function App() {
                         onClose={workspace.handleCloseFile}
                         readOnly={syncMode === 'code_mode' && workspace.openFile.startsWith('.jamo/creator/')}
                       />
-                    ) : (
+                    ) : workspace.openFile.startsWith('.jamo/creator/') ? (
                       <CanvasPanel
                         workspaceId={workspace.workspaceId}
                         filePath={workspace.openFile}
                         onClose={workspace.handleCloseFile}
                         onFileRenamed={workspace.handleFileRenamed}
-                        readOnly={syncMode === 'code_mode' && workspace.openFile.startsWith('.jamo/creator/')}
+                        readOnly={syncMode === 'code_mode'}
+                      />
+                    ) : (
+                      <CodeEditorPanel
+                        workspaceId={workspace.workspaceId}
+                        filePath={workspace.openFile}
+                        onClose={workspace.handleCloseFile}
+                        readOnly={syncMode === 'creator_mode'}
                       />
                     )
                   ) : (
