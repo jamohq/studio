@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { EnvCheckResult } from '../../shared/types';
 
 /** UTF-8 safe base64 encode (btoa only handles Latin1). */
 function toBase64(str: string): string {
@@ -34,7 +35,7 @@ const CLAUDE_CMD =
  *  Uses -p (print mode) so claude exits after completing instead of waiting for input.
  *  Pipes through tee to capture output; pipefail ensures claude's exit code is preserved. */
 const RUN_SCRIPT =
-  '#!/bin/bash\nset -o pipefail\nclaude -p --append-system-prompt "$(cat .jamo/.prompt)" "Begin." | tee .jamo/.output\n';
+  '#!/bin/bash\nset -o pipefail\nclaude -p --dangerously-skip-permissions --append-system-prompt "$(cat .jamo/.prompt)" "Begin." | tee .jamo/.output\n';
 
 export type ActionStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -48,8 +49,12 @@ export function useActionRunner(
   const [actionLabel, setActionLabel] = useState('');
   const pendingActionRef = useRef<string | null>(null);
 
-  const sendActionToTerminal = useCallback(async (prompt: string, label: string) => {
-    if (!workspaceId) return;
+  const sendActionToTerminal = useCallback(async (prompt: string, label: string): Promise<EnvCheckResult | null> => {
+    if (!workspaceId) return null;
+
+    // Gate on environment check before dispatching.
+    const envResult = await window.jamo.checkEnvironment();
+    if (!envResult.ready) return envResult;
 
     // Write prompt and wrapper script to hidden files.
     await window.jamo.writeFile(workspaceId, '.jamo/.prompt', prompt);
@@ -68,6 +73,8 @@ export function useActionRunner(
     } else {
       pendingActionRef.current = CLAUDE_CMD;
     }
+
+    return null;
   }, [terminalOpen, terminalSessionId, workspaceId, openTerminal]);
 
   // Send pending action when terminal session becomes ready.

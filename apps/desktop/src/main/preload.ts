@@ -94,6 +94,8 @@ const api = {
   },
 
   openExternal: (url: string) => ipcRenderer.invoke('jamo:open-external', url),
+
+  checkEnvironment: () => ipcRenderer.invoke('jamo:check-environment'),
 };
 
 contextBridge.exposeInMainWorld('jamo', api);

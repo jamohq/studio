@@ -11,8 +11,10 @@ import RunTerminalPanel from './components/RunTerminalPanel';
 import ChangesPanel from './components/ChangesPanel';
 import CodeEditorPanel from './codeeditor/CodeEditorPanel';
 import OnboardingOverlay from './components/OnboardingOverlay';
+import SetupDialog from './components/SetupDialog';
 import { ToastProvider, useToast } from './components/Toast';
 import type { ActionStatus } from './hooks/useActionRunner';
+import type { EnvCheckResult } from '../shared/types';
 import { useChangeTracking } from './hooks/useChangeTracking';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTerminal } from './hooks/useTerminal';
@@ -146,6 +148,40 @@ export default function App() {
     setShowOnboarding(false);
   }, []);
 
+  // -- Environment setup dialog ------------------------------------------------
+  const [setupResult, setSetupResult] = useState<EnvCheckResult | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const pendingRetryRef = useRef<{ prompt: string; label: string } | null>(null);
+
+  const gatedSendAction = useCallback(async (prompt: string, label: string) => {
+    const result = await sendActionToTerminal(prompt, label);
+    if (result) {
+      // Env check failed — show dialog and remember the action for retry
+      setSetupResult(result);
+      setSetupOpen(true);
+      pendingRetryRef.current = { prompt, label };
+    }
+  }, [sendActionToTerminal]);
+
+  const handleSetupRecheck = useCallback(async () => {
+    const result = await window.jamo.checkEnvironment();
+    setSetupResult(result);
+    if (result.ready) {
+      setSetupOpen(false);
+      // Retry the pending action
+      if (pendingRetryRef.current) {
+        const { prompt, label } = pendingRetryRef.current;
+        pendingRetryRef.current = null;
+        sendActionToTerminal(prompt, label);
+      }
+    }
+  }, [sendActionToTerminal]);
+
+  const handleSetupDismiss = useCallback(() => {
+    setSetupOpen(false);
+    pendingRetryRef.current = null;
+  }, []);
+
   // -- Action props shared by CreatorPanel and ExplorerPanel -------------------
   const actionRunning = actionStatus === 'running';
   const terminalReady = !!terminal.terminalSessionId;
@@ -232,7 +268,7 @@ export default function App() {
                         onOpenFile={workspace.handleOpenFile}
                         onFileDeleted={workspace.handleFileDeleted}
                         activeFile={workspace.openFile}
-                        onExecuteAction={sendActionToTerminal}
+                        onExecuteAction={gatedSendAction}
                         terminalReady={terminalReady}
                         actionRunning={actionRunning}
                       />
@@ -244,7 +280,7 @@ export default function App() {
                         onOpenFile={workspace.handleOpenCreatorFile}
                         onFileDeleted={workspace.handleFileDeleted}
                         refreshKey={workspace.creatorRefreshKey}
-                        onExecuteAction={sendActionToTerminal}
+                        onExecuteAction={gatedSendAction}
                         terminalReady={terminalReady}
                         actionRunning={actionRunning}
                       />
@@ -381,6 +417,16 @@ export default function App() {
 
         {/* Action completion toast */}
         <ActionToast status={actionStatus} label={actionLabel} />
+
+        {/* Environment setup dialog */}
+        {setupResult && (
+          <SetupDialog
+            open={setupOpen}
+            result={setupResult}
+            onRecheck={handleSetupRecheck}
+            onDismiss={handleSetupDismiss}
+          />
+        )}
 
         {/* First-run onboarding */}
         {showOnboarding && <OnboardingOverlay onComplete={handleOnboardingComplete} />}

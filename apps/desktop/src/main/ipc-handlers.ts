@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { GrpcClients } from './grpc-client';
 import { IPC } from '../shared/types';
+import { checkEnvironment } from './env-check';
 
 const activeTerminalStreams = new Map<string, any>();
 
@@ -163,6 +164,10 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
 
   ipcMain.handle(IPC.OPEN_EXTERNAL, async (_event, url: string) => {
     await shell.openExternal(url);
+  });
+
+  ipcMain.handle(IPC.CHECK_ENVIRONMENT, async () => {
+    return checkEnvironment();
   });
 
   // -------------------------------------------------------------------------

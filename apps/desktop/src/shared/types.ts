@@ -118,7 +118,25 @@ export const IPC = {
   CHECK_DIR_EMPTY: 'jamo:check-dir-empty',
   CLEAR_DIR: 'jamo:clear-dir',
   OPEN_EXTERNAL: 'jamo:open-external',
+  CHECK_ENVIRONMENT: 'jamo:check-environment',
 } as const;
+
+// Environment check types
+export interface DepCheck {
+  name: string;
+  found: boolean;
+  version?: string;
+  error?: string;
+  fix?: string;
+  fixUrl?: string;
+}
+
+export interface EnvCheckResult {
+  deps: DepCheck[];
+  claudeAuthenticated: boolean;
+  claudeBypassMode: boolean;
+  ready: boolean;
+}
 
 // Window API exposed via preload
 export interface JamoAPI {
@@ -152,6 +170,7 @@ export interface JamoAPI {
   gitLog(wsId: string, limit?: number): Promise<GitLogResponse>;
   gitCheckout(wsId: string, paths?: string[]): Promise<void>;
   openExternal(url: string): Promise<void>;
+  checkEnvironment(): Promise<EnvCheckResult>;
 }
 
 declare global {
