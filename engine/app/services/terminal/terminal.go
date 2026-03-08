@@ -4,6 +4,7 @@ package terminal
 import (
 	"context"
 	"io"
+	"os"
 
 	"github.com/jamojamo/studio/engine/app/sdk/errs"
 	"github.com/jamojamo/studio/engine/business/domain/terminalbus"
@@ -46,7 +47,10 @@ func Register(server *grpc.Server, cfg Config) {
 
 // CreateTerminal creates a new terminal session.
 func (a *App) CreateTerminal(ctx context.Context, req *jamov1.CreateTerminalRequest) (*jamov1.CreateTerminalResponse, error) {
-	shell := "/bin/zsh"
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
 
 	cols := uint16(req.GetCols())
 	rows := uint16(req.GetRows())

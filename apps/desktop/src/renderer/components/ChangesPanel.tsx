@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { useToast } from './Toast';
 import type { SyncMode } from '../hooks/useSyncStatus';
 import type { ChangedFile } from '../../shared/types';
 
@@ -25,20 +26,20 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
 
 const MODE_BANNER: Record<string, { label: string; className: string }> = {
   creator_mode: {
-    label: 'Creator Mode — review changes and commit',
+    label: 'Designing — review changes and save',
     className: 'bg-purple-500/15 text-purple-300 border-purple-500/30',
   },
   code_mode: {
-    label: 'Code Mode — review changes and commit',
+    label: 'Building — review changes and save',
     className: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
   },
 };
 
 const PREFILL_MESSAGES: Record<string, string> = {
-  'generate-creator': 'Generate creator files from codebase',
-  'update-creator': 'Update creator files to match codebase',
-  'generate-code': 'Generate code from creator blueprints',
-  'update-code': 'Update code to match creator blueprints',
+  'generate-creator': 'Generate designs from codebase',
+  'update-creator': 'Update designs to match codebase',
+  'generate-code': 'Generate code from designs',
+  'update-code': 'Update code to match designs',
 };
 
 interface ChangesPanelProps {
@@ -49,6 +50,7 @@ interface ChangesPanelProps {
 }
 
 export default function ChangesPanel({ workspaceId, syncMode, lastAction, onCommit }: ChangesPanelProps) {
+  const { toast } = useToast();
   const [files, setFiles] = useState<ChangedFile[]>([]);
   const [isClean, setIsClean] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -110,7 +112,7 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
       refresh();
     } catch (err: any) {
       console.error('Commit failed:', err);
-      alert('Commit failed: ' + (err?.message || err));
+      toast({ title: 'Save failed', description: err?.message || String(err), variant: 'error' });
     } finally {
       setCommitting(false);
     }
@@ -151,7 +153,7 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
           <input
             value={commitMsg}
             onChange={(e) => setCommitMsg(e.target.value)}
-            placeholder="Commit message..."
+            placeholder="Save message..."
             className="flex-1 text-[13px] px-3 py-1.5 bg-background-deep border border-border rounded focus:outline-none focus:border-accent"
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCommitClick(); } }}
           />
@@ -161,7 +163,7 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
             size="sm"
             className="text-[13px] font-semibold h-8 px-6 bg-accent hover:bg-accent/90"
           >
-            {committing ? 'Committing...' : 'Commit'}
+            {committing ? 'Saving...' : 'Save'}
           </Button>
           <button
             onClick={refresh}
@@ -248,9 +250,9 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
       <AlertDialog open={showSyncWarning} onOpenChange={(open) => { if (!open) { setShowSyncWarning(false); pendingCommitRef.current = false; } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Commit without syncing?</AlertDialogTitle>
+            <AlertDialogTitle>Save without syncing?</AlertDialogTitle>
             <AlertDialogDescription>
-              You're committing creator file changes without syncing code. Only do this if you're manually fixing AI output.
+              You're saving design changes without updating code. Only do this if you're manually fixing AI output.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

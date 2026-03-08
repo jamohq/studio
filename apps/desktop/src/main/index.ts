@@ -1,6 +1,6 @@
-import { app, BrowserWindow, Menu, shell, dialog, nativeImage } from 'electron';
+import { app, BrowserWindow, Menu, shell, dialog, nativeImage, session } from 'electron';
 import * as path from 'path';
-import { startEngine, EngineHandle } from './engine';
+import { startEngineWithRecovery, EngineHandle } from './engine';
 import { createClients } from './grpc-client';
 import { registerIpcHandlers } from './ipc-handlers';
 
@@ -40,12 +40,12 @@ function buildAppMenu() {
       label: 'File',
       submenu: [
         {
-          label: 'Open Workspace…',
+          label: 'Open Project…',
           accelerator: 'CmdOrCtrl+O',
           click: async () => {
             const result = await dialog.showOpenDialog({
               properties: ['openDirectory', 'createDirectory'],
-              title: 'Open Workspace',
+              title: 'Open Project',
             });
             if (!result.canceled && result.filePaths.length > 0) {
               const win = BrowserWindow.getFocusedWindow();
@@ -133,6 +133,18 @@ async function createWindow() {
     },
   });
 
+  // Set Content-Security-Policy headers.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* http://localhost:*; font-src 'self' data:",
+        ],
+      },
+    });
+  });
+
   // Load the UI immediately so the user sees something.
   const isDev = process.env.NODE_ENV !== 'production';
   if (isDev) {
@@ -145,7 +157,19 @@ async function createWindow() {
   // Start the Go engine in the background.
   try {
     console.log('Starting Jamo engine...');
-    engine = await startEngine();
+    engine = await startEngineWithRecovery(
+      (newHandle) => {
+        console.log(`Engine restarted on port ${newHandle.port}`);
+        engine = newHandle;
+        const newClients = createClients(newHandle.port, newHandle.token);
+        registerIpcHandlers(newClients, mainWindow);
+        mainWindow.webContents.send('engine-restarted');
+      },
+      (error) => {
+        console.error('Engine fatal crash:', error);
+        mainWindow.webContents.send('engine-crashed', error);
+      },
+    );
     console.log(`Engine started on port ${engine.port}`);
 
     const clients = createClients(engine.port, engine.token);

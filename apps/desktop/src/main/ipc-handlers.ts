@@ -149,9 +149,15 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
   });
 
   ipcMain.handle(IPC.CLEAR_DIR, async (_event, dirPath: string) => {
-    const entries = fs.readdirSync(dirPath);
+    // Validate: path must be absolute, within user's home directory, and normalized.
+    const resolved = path.resolve(dirPath);
+    const home = require('os').homedir();
+    if (!resolved.startsWith(home + path.sep) || resolved === home) {
+      throw new Error('Cannot clear directory outside of home folder');
+    }
+    const entries = fs.readdirSync(resolved);
     for (const entry of entries) {
-      fs.rmSync(path.join(dirPath, entry), { recursive: true, force: true });
+      fs.rmSync(path.join(resolved, entry), { recursive: true, force: true });
     }
   });
 

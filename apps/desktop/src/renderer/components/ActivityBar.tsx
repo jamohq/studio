@@ -15,10 +15,10 @@ export default function ActivityBar({ activePanel, onPanelChange }: ActivityBarP
   const { theme, toggleTheme } = useTheme();
 
   const items: { panel: SidePanel; icon: React.ReactNode; title: string }[] = [
-    { panel: 'explorer', icon: <Code2 className="h-[22px] w-[22px]" />, title: 'Explorer' },
-    { panel: 'creator', icon: <Paintbrush className="h-[22px] w-[22px]" />, title: 'Creator' },
-    { panel: 'actions', icon: <Zap className="h-[22px] w-[22px]" />, title: 'Actions' },
-    { panel: 'changes', icon: <GitBranch className="h-[22px] w-[22px]" />, title: 'Changes' },
+    { panel: 'explorer', icon: <Code2 className="h-[22px] w-[22px]" />, title: 'Files' },
+    { panel: 'creator', icon: <Paintbrush className="h-[22px] w-[22px]" />, title: 'Design' },
+    { panel: 'actions', icon: <Zap className="h-[22px] w-[22px]" />, title: 'Build' },
+    { panel: 'changes', icon: <GitBranch className="h-[22px] w-[22px]" />, title: 'History' },
   ];
 
   return (

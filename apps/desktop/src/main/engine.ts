@@ -8,7 +8,13 @@ export interface EngineHandle {
   process: ChildProcess;
 }
 
-export function startEngine(): Promise<EngineHandle> {
+/** Callback invoked when the engine crashes after initial startup. */
+export type OnEngineCrash = (code: number | null, signal: string | null) => void;
+
+const MAX_RESTART_ATTEMPTS = 3;
+const RESTART_BASE_DELAY_MS = 1000;
+
+export function startEngine(onCrash?: OnEngineCrash): Promise<EngineHandle> {
   return new Promise((resolve, reject) => {
     const engineDir = path.resolve(__dirname, '..', '..', '..', '..', 'engine');
 
@@ -51,10 +57,13 @@ export function startEngine(): Promise<EngineHandle> {
       }
     });
 
-    proc.on('exit', (code) => {
+    proc.on('exit', (code, signal) => {
       if (!resolved) {
         resolved = true;
         reject(new Error(`Engine exited before ready with code ${code}`));
+      } else if (onCrash) {
+        // Engine crashed after successful startup.
+        onCrash(code, signal ? String(signal) : null);
       }
     });
 
@@ -67,4 +76,37 @@ export function startEngine(): Promise<EngineHandle> {
       }
     }, 30000);
   });
+}
+
+/**
+ * Start the engine with automatic crash recovery (up to MAX_RESTART_ATTEMPTS).
+ * Returns the initial handle; onRestart is called with the new handle after each restart.
+ */
+export async function startEngineWithRecovery(
+  onRestart: (handle: EngineHandle) => void,
+  onFatalCrash: (error: string) => void,
+): Promise<EngineHandle> {
+  let restartCount = 0;
+
+  function scheduleRestart() {
+    restartCount++;
+    if (restartCount > MAX_RESTART_ATTEMPTS) {
+      onFatalCrash(`Engine crashed ${MAX_RESTART_ATTEMPTS} times, giving up.`);
+      return;
+    }
+    const delay = RESTART_BASE_DELAY_MS * Math.pow(2, restartCount - 1);
+    console.log(`Engine crashed. Restarting in ${delay}ms (attempt ${restartCount}/${MAX_RESTART_ATTEMPTS})...`);
+    setTimeout(async () => {
+      try {
+        const handle = await startEngine(() => scheduleRestart());
+        restartCount = 0; // Reset on successful restart.
+        onRestart(handle);
+      } catch (err: any) {
+        console.error('Engine restart failed:', err.message);
+        scheduleRestart();
+      }
+    }, delay);
+  }
+
+  return startEngine(() => scheduleRestart());
 }

@@ -18,6 +18,7 @@ import {
   ContextMenuTrigger,
 } from './ui/context-menu';
 import { cn } from '@/lib/utils';
+import { useToast } from './Toast';
 import { SECTIONS, SECTIONS_DIR } from '../sections';
 import type { FileEntry } from '../../shared/types';
 
@@ -49,6 +50,7 @@ function nameFromFile(filename: string): string {
 // Main panel
 // ---------------------------------------------------------------------------
 export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFileDeleted, refreshKey }: CreatorPanelProps) {
+  const { toast } = useToast();
   const [nodes, setNodes] = useState<CreatorNode[]>([]);
   const nodesRef = useRef<CreatorNode[]>([]);
   nodesRef.current = nodes;
@@ -184,7 +186,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
       refresh();
     } catch (err: any) {
       console.error('Failed to create file:', err);
-      alert('Failed to create file: ' + (err?.message || err));
+      toast({ title: 'Failed to create file', description: err?.message || String(err), variant: 'error' });
     }
   }, [workspaceId, onOpenFile, refresh, ensureCreatorDir]);
 
@@ -229,7 +231,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
       refresh();
     } catch (err: any) {
       console.error('Failed to create directory:', err);
-      alert('Failed to create directory: ' + (err?.message || err));
+      toast({ title: 'Failed to create folder', description: err?.message || String(err), variant: 'error' });
       setNewDirParent(null);
     } finally {
       commitNewDirRef.current = false;
@@ -276,7 +278,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
       refresh();
     } catch (err: any) {
       console.error('Failed to rename:', err);
-      alert('Failed to rename: ' + (err?.message || err));
+      toast({ title: 'Failed to rename', description: err?.message || String(err), variant: 'error' });
       setRenamePath(null);
     } finally {
       commitRenameRef.current = false;
@@ -450,7 +452,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
     >
       {/* Header */}
       <div className="px-3 py-2.5 text-[11px] font-semibold uppercase text-foreground-muted flex items-center justify-between">
-        <span>Creator</span>
+        <span>Design</span>
         <div className="flex gap-1">
           <Button
             variant="ghost"

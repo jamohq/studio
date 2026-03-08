@@ -13,11 +13,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 
-interface RecentWorkspace {
-  path: string;
-  name: string;
-  openedAt: number;
-}
+import type { RecentWorkspace } from '../hooks/useWorkspace';
 
 interface WelcomePageProps {
   onOpenFolder: () => void;
@@ -77,20 +73,20 @@ export default function WelcomePage({ onOpenFolder, onCreateEmpty, onCreateSampl
       {/* Primary actions */}
       <div className="flex flex-col gap-3 w-full max-w-[280px]">
         <Button onClick={() => pickAndCreate('empty')} className="w-full text-[15px] font-semibold">
-          Create Empty Workspace
+          Create Empty Project
         </Button>
         <Button onClick={() => pickAndCreate('sample')} variant="outline" className="w-full text-[15px] font-semibold">
-          Create Sample Workspace
+          Create Sample Project
         </Button>
         <Button onClick={onOpenFolder} variant="outline" className="w-full text-[15px] font-semibold">
-          Open Workspace
+          Open Project
         </Button>
       </div>
 
       {/* Recent workspaces */}
       {recentWorkspaces.length > 0 && (
         <div className="w-full max-w-[400px] mt-4">
-          <div className="text-[13px] font-semibold text-foreground-muted mb-3">Workspaces</div>
+          <div className="text-[13px] font-semibold text-foreground-muted mb-3">Recent Projects</div>
           <div className="flex flex-col gap-1">
             {recentWorkspaces.map((ws) => {
               const parts = ws.path.split('/');
@@ -117,7 +113,7 @@ export default function WelcomePage({ onOpenFolder, onCreateEmpty, onCreateSampl
             <AlertDialogTitle>Directory is not empty</AlertDialogTitle>
             <AlertDialogDescription>
               <span className="font-mono text-foreground">{warnPath}</span> contains existing files.
-              All files in this directory will be deleted and replaced with a new Jamo project.
+              All files in this directory will be deleted and replaced with a new project.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
