@@ -85,6 +85,14 @@ func (a *App) Commit(ctx context.Context, req *jamov1.GitCommitRequest) (*jamov1
 	return &jamov1.GitCommitResponse{CommitHash: hash}, nil
 }
 
+// Checkout discards uncommitted changes for specified paths.
+func (a *App) Checkout(ctx context.Context, req *jamov1.GitCheckoutRequest) (*jamov1.GitCheckoutResponse, error) {
+	if err := a.bus.Checkout(ctx, req.GetWorkspaceId(), req.GetPaths()); err != nil {
+		return nil, errs.ToGRPCError(err)
+	}
+	return &jamov1.GitCheckoutResponse{}, nil
+}
+
 // Log returns recent commit history.
 func (a *App) Log(ctx context.Context, req *jamov1.GitLogRequest) (*jamov1.GitLogResponse, error) {
 	entries, err := a.bus.Log(ctx, req.GetWorkspaceId(), int(req.GetLimit()))

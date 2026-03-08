@@ -280,6 +280,67 @@ func (b *Business) Commit(ctx context.Context, wsID, message string) (string, er
 	return hash, nil
 }
 
+// Checkout discards uncommitted changes for the given paths.
+// If paths is empty, it discards all changes (git checkout -- .).
+// For untracked files, it removes them. For tracked files, it restores them.
+func (b *Business) Checkout(ctx context.Context, wsID string, paths []string) error {
+	dir, err := b.workspacePath(wsID)
+	if err != nil {
+		return err
+	}
+
+	if len(paths) == 0 {
+		// Discard all: reset tracked files and clean untracked.
+		if _, err := b.runGit(ctx, dir, "checkout", "--", "."); err != nil {
+			return errs.Newf(codes.Internal, "git checkout failed: %s", err)
+		}
+		if _, err := b.runGit(ctx, dir, "clean", "-fd"); err != nil {
+			return errs.Newf(codes.Internal, "git clean failed: %s", err)
+		}
+		b.log.Info(ctx, "discarded all changes", "workspace", wsID)
+		return nil
+	}
+
+	// Separate tracked vs untracked files.
+	statusOut, err := b.runGit(ctx, dir, "status", "--porcelain=v1")
+	if err != nil {
+		return errs.Newf(codes.Internal, "git status failed: %s", err)
+	}
+
+	untrackedSet := make(map[string]bool)
+	scanner := bufio.NewScanner(strings.NewReader(statusOut))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) >= 4 && line[0] == '?' && line[1] == '?' {
+			p := strings.TrimSpace(line[3:])
+			untrackedSet[p] = true
+		}
+	}
+
+	var trackedPaths []string
+	for _, p := range paths {
+		if untrackedSet[p] {
+			// Remove untracked file/directory.
+			absPath := filepath.Join(dir, p)
+			if err := os.RemoveAll(absPath); err != nil {
+				return errs.Newf(codes.Internal, "failed to remove %s: %s", p, err)
+			}
+		} else {
+			trackedPaths = append(trackedPaths, p)
+		}
+	}
+
+	if len(trackedPaths) > 0 {
+		args := append([]string{"checkout", "--"}, trackedPaths...)
+		if _, err := b.runGit(ctx, dir, args...); err != nil {
+			return errs.Newf(codes.Internal, "git checkout failed: %s", err)
+		}
+	}
+
+	b.log.Info(ctx, "discarded changes", "workspace", wsID, "paths", paths)
+	return nil
+}
+
 // Log returns recent commit history.
 func (b *Business) Log(ctx context.Context, wsID string, limit int) ([]GitLogEntry, error) {
 	dir, err := b.workspacePath(wsID)

@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { RefreshCw } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { RefreshCw, Undo2 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   AlertDialog,
@@ -60,6 +60,7 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
   const [diffContent, setDiffContent] = useState<string | null>(null);
   const [showSyncWarning, setShowSyncWarning] = useState(false);
   const pendingCommitRef = useRef(false);
+  const [revertTarget, setRevertTarget] = useState<{ label: string; paths: string[] } | null>(null);
 
   // Pre-fill commit message based on last action.
   useEffect(() => {
@@ -138,6 +139,34 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
     }
   }, [doCommit]);
 
+  // Group files by top-level folder for folder-level revert.
+  const folderGroups = useMemo(() => {
+    const groups = new Map<string, ChangedFile[]>();
+    for (const file of files) {
+      const slash = file.path.indexOf('/');
+      const folder = slash > 0 ? file.path.slice(0, slash) : '.';
+      const arr = groups.get(folder) || [];
+      arr.push(file);
+      groups.set(folder, arr);
+    }
+    return groups;
+  }, [files]);
+
+  const handleRevertConfirm = useCallback(async () => {
+    if (!revertTarget) return;
+    try {
+      await window.jamo.gitCheckout(workspaceId, revertTarget.paths.length > 0 ? revertTarget.paths : undefined);
+      toast({ title: 'Reverted', description: `Discarded changes to ${revertTarget.label}`, variant: 'success' });
+      setRevertTarget(null);
+      setSelectedFile(null);
+      setDiffContent(null);
+      refresh();
+    } catch (err: any) {
+      toast({ title: 'Revert failed', description: err?.message || String(err), variant: 'error' });
+      setRevertTarget(null);
+    }
+  }, [workspaceId, revertTarget, refresh, toast]);
+
   const banner = MODE_BANNER[syncMode];
 
   return (
@@ -179,8 +208,19 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
       <div className="flex-1 flex overflow-hidden">
         {/* File list */}
         <div className="w-72 shrink-0 border-r overflow-auto">
-          <div className="px-3 py-2 text-[11px] font-semibold uppercase text-foreground-muted">
-            Changed Files {!isClean && <span className="text-foreground-dim">({files.length})</span>}
+          <div className="px-3 py-2 flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase text-foreground-muted flex-1">
+              Changed Files {!isClean && <span className="text-foreground-dim">({files.length})</span>}
+            </span>
+            {!isClean && (
+              <button
+                onClick={() => setRevertTarget({ label: 'all files', paths: [] })}
+                title="Revert all changes"
+                className="text-foreground-dim hover:text-destructive transition-colors p-0.5"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           {isClean ? (
             <div className="text-[12px] text-foreground-dim px-3 py-2">
@@ -188,25 +228,61 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
             </div>
           ) : (
             <div className="px-1">
-              {files.map((file) => {
-                const badge = STATUS_BADGE[file.status] || STATUS_BADGE.modified;
-                const isSelected = selectedFile === file.path;
-                return (
-                  <button
-                    key={file.path}
-                    onClick={() => viewDiff(file.path)}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1.5 text-left rounded text-[12px] hover:bg-accent-bg transition-colors',
-                      isSelected && 'bg-accent-bg',
-                    )}
-                  >
-                    <span className={cn('px-1 rounded text-[10px] font-mono font-bold shrink-0', badge.className)}>
-                      {badge.label}
-                    </span>
-                    <span className="truncate text-foreground-muted">{file.path}</span>
-                  </button>
-                );
-              })}
+              {[...folderGroups.entries()].map(([folder, folderFiles]) => (
+                <React.Fragment key={folder}>
+                  {/* Folder header (only if there are multiple folders) */}
+                  {folderGroups.size > 1 && (
+                    <div className="flex items-center gap-1 px-2 py-1 mt-1">
+                      <span className="text-[10px] font-semibold text-foreground-dim uppercase truncate flex-1">
+                        {folder === '.' ? 'Root' : folder}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setRevertTarget({ label: folder === '.' ? 'root files' : `${folder}/`, paths: folderFiles.map((f) => f.path) });
+                        }}
+                        title={`Revert all changes in ${folder}`}
+                        className="text-foreground-dim hover:text-destructive transition-colors p-0.5"
+                      >
+                        <Undo2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {folderFiles.map((file) => {
+                    const badge = STATUS_BADGE[file.status] || STATUS_BADGE.modified;
+                    const isSelected = selectedFile === file.path;
+                    return (
+                      <div
+                        key={file.path}
+                        className={cn(
+                          'group flex items-center gap-2 px-2 py-1.5 rounded text-[12px] hover:bg-accent-bg transition-colors cursor-pointer',
+                          isSelected && 'bg-accent-bg',
+                        )}
+                      >
+                        <button
+                          onClick={() => viewDiff(file.path)}
+                          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                        >
+                          <span className={cn('px-1 rounded text-[10px] font-mono font-bold shrink-0', badge.className)}>
+                            {badge.label}
+                          </span>
+                          <span className="truncate text-foreground-muted">{file.path}</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRevertTarget({ label: file.path, paths: [file.path] });
+                          }}
+                          title={`Revert ${file.path}`}
+                          className="text-foreground-dim hover:text-destructive transition-colors p-0.5 opacity-0 group-hover:opacity-100"
+                        >
+                          <Undo2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </div>
           )}
         </div>
@@ -259,6 +335,24 @@ export default function ChangesPanel({ workspaceId, syncMode, lastAction, onComm
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleWarningConfirm}>
               Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Revert confirmation dialog */}
+      <AlertDialog open={!!revertTarget} onOpenChange={(open) => { if (!open) setRevertTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revert changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will discard all unsaved changes to <strong>{revertTarget?.label}</strong>. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRevertConfirm} className="bg-destructive hover:bg-destructive/90">
+              Revert
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

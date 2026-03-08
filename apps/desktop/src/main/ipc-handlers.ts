@@ -223,6 +223,15 @@ export function registerIpcHandlers(clients: GrpcClients, mainWindow: BrowserWin
     });
   });
 
+  ipcMain.handle(IPC.GIT_CHECKOUT, async (_event, wsId: string, paths: string[]) => {
+    return new Promise((resolve, reject) => {
+      clients.git.checkout({ workspaceId: wsId, paths: paths || [] }, (err: any) => {
+        if (err) return reject(err);
+        resolve(undefined);
+      });
+    });
+  });
+
   ipcMain.handle(IPC.CREATE_TERMINAL, async (_event, wsId: string, cols: number, rows: number) => {
     return new Promise((resolve, reject) => {
       clients.terminal.createTerminal(

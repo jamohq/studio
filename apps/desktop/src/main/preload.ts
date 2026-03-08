@@ -75,6 +75,9 @@ const api = {
   gitLog: (wsId: string, limit?: number) =>
     ipcRenderer.invoke('jamo:git-log', wsId, limit),
 
+  gitCheckout: (wsId: string, paths?: string[]) =>
+    ipcRenderer.invoke('jamo:git-checkout', wsId, paths || []),
+
   generate: (wsId: string, prompt: string) =>
     ipcRenderer.invoke('jamo:generate', wsId, prompt),
 

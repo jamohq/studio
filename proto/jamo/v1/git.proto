@@ -10,6 +10,7 @@ service GitService {
   rpc Diff(GitDiffRequest) returns (GitDiffResponse);
   rpc Commit(GitCommitRequest) returns (GitCommitResponse);
   rpc Log(GitLogRequest) returns (GitLogResponse);
+  rpc Checkout(GitCheckoutRequest) returns (GitCheckoutResponse);
 }
 
 message GitInitRequest {
@@ -67,3 +68,10 @@ message GitLogEntry {
   string message = 3;
   string timestamp = 4;
 }
+
+message GitCheckoutRequest {
+  string workspace_id = 1;
+  repeated string paths = 2;
+}
+
+message GitCheckoutResponse {}

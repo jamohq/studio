@@ -114,6 +114,7 @@ export const IPC = {
   GIT_DIFF: 'jamo:git-diff',
   GIT_COMMIT: 'jamo:git-commit',
   GIT_LOG: 'jamo:git-log',
+  GIT_CHECKOUT: 'jamo:git-checkout',
   CHECK_DIR_EMPTY: 'jamo:check-dir-empty',
   CLEAR_DIR: 'jamo:clear-dir',
   OPEN_EXTERNAL: 'jamo:open-external',
@@ -149,6 +150,7 @@ export interface JamoAPI {
   gitDiff(wsId: string, filePath?: string): Promise<GitDiffResponse>;
   gitCommit(wsId: string, message: string): Promise<GitCommitResponse>;
   gitLog(wsId: string, limit?: number): Promise<GitLogResponse>;
+  gitCheckout(wsId: string, paths?: string[]): Promise<void>;
   openExternal(url: string): Promise<void>;
 }
 
