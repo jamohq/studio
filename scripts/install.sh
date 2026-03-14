@@ -51,14 +51,14 @@ download() {
 install_mac() {
   local artifact url tmp
 
-  # electron-builder names: "Jamo Studio-VERSION-arm64-mac.zip" or "Jamo Studio-VERSION-mac.zip" (x64)
+  # electron-builder names: "Jamo.Studio-VERSION-arm64-mac.zip" or "Jamo.Studio-VERSION-mac.zip" (x64)
   if [ "$ARCH" = "arm64" ]; then
-    artifact="Jamo Studio-${VERSION}-arm64-mac.zip"
+    artifact="Jamo.Studio-${VERSION}-arm64-mac.zip"
   else
-    artifact="Jamo Studio-${VERSION}-mac.zip"
+    artifact="Jamo.Studio-${VERSION}-mac.zip"
   fi
 
-  url="https://github.com/$REPO/releases/download/v${VERSION}/$(echo "$artifact" | sed 's/ /%20/g')"
+  url="https://github.com/$REPO/releases/download/v${VERSION}/${artifact}"
   tmp="$(mktemp -d)"
 
   download "$url" "$tmp/$artifact"
@@ -82,14 +82,14 @@ install_mac() {
 install_linux() {
   local artifact url install_dir
 
-  # electron-builder names: "Jamo Studio-VERSION-arm64.AppImage" or "Jamo Studio-VERSION.AppImage" (x64)
+  # electron-builder names: "Jamo.Studio-VERSION-arm64.AppImage" or "Jamo.Studio-VERSION.AppImage" (x64)
   if [ "$ARCH" = "arm64" ]; then
-    artifact="Jamo Studio-${VERSION}-arm64.AppImage"
+    artifact="Jamo.Studio-${VERSION}-arm64.AppImage"
   else
-    artifact="Jamo Studio-${VERSION}.AppImage"
+    artifact="Jamo.Studio-${VERSION}.AppImage"
   fi
 
-  url="https://github.com/$REPO/releases/download/v${VERSION}/$(echo "$artifact" | sed 's/ /%20/g')"
+  url="https://github.com/$REPO/releases/download/v${VERSION}/${artifact}"
 
   install_dir="${HOME}/.local/bin"
   mkdir -p "$install_dir"
