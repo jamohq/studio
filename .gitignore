@@ -5,7 +5,6 @@ dist/
 
 # Go
 engine/jamo-engine
-engine/proto/jamo/v1/*.pb.go
 
 # Electron
 apps/desktop/out/
