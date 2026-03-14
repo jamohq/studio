@@ -31,6 +31,8 @@ Grab the latest release from [GitHub Releases](https://github.com/jamohq/studio/
 |----------|--------|
 | macOS (Apple Silicon) | `.dmg` / `.zip` |
 | macOS (Intel) | `.dmg` / `.zip` |
+| Windows (x64) | `.exe` installer |
+| Windows (arm64) | `.exe` installer |
 | Linux (x64) | `.AppImage` / `.deb` |
 | Linux (arm64) | `.AppImage` / `.deb` |
 
@@ -52,6 +54,7 @@ pnpm dev
 - **Rich text** — TipTap editor for notes and documentation
 - **File management** — create, rename, delete, and organize files
 - **Activity feed** — live panel showing workspace events
+
 ## Architecture
 
 Jamo Studio runs as two processes:

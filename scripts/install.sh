@@ -2,10 +2,9 @@
 set -euo pipefail
 
 # Jamo Studio installer
-# Usage: curl -fsSL https://jamohq.com/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/jamohq/studio/main/scripts/install.sh | sh
 
 REPO="jamohq/studio"
-INSTALL_DIR="/usr/local/bin"
 APP_DIR="/Applications"
 
 info() { echo "  $*"; }
@@ -19,7 +18,7 @@ detect_platform() {
   case "$os" in
     Darwin) OS="darwin" ;;
     Linux)  OS="linux" ;;
-    *)      error "Unsupported OS: $os" ;;
+    *)      error "Unsupported OS: $os. For Windows, download from https://github.com/$REPO/releases" ;;
   esac
 
   case "$arch" in
@@ -30,24 +29,45 @@ detect_platform() {
 }
 
 get_latest_version() {
-  VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"v\(.*\)".*/\1/')"
-  [ -n "$VERSION" ] || error "Could not determine latest version. Check https://github.com/$REPO/releases"
+  if ! command -v curl >/dev/null 2>&1; then
+    error "curl is required but not installed"
+  fi
+
+  local response
+  response="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null)" \
+    || error "No releases found. Check https://github.com/$REPO/releases"
+
+  VERSION="$(echo "$response" | grep '"tag_name"' | head -1 | sed 's/.*"v\(.*\)".*/\1/')"
+  [ -n "$VERSION" ] || error "Could not determine latest version"
+}
+
+download() {
+  local url="$1" dest="$2"
+  info "Downloading $(basename "$dest")..."
+  curl -fSL --progress-bar "$url" -o "$dest" \
+    || error "Download failed: $url"
 }
 
 install_mac() {
-  local artifact="Jamo-Studio-${VERSION}-${ARCH}-mac.zip"
-  local url="https://github.com/$REPO/releases/download/v${VERSION}/${artifact}"
-  local tmp="$(mktemp -d)"
+  local artifact url tmp
 
-  info "Downloading $artifact..."
-  curl -fSL "$url" -o "$tmp/$artifact" || error "Download failed. Check if v${VERSION} has a release for $ARCH."
+  # electron-builder names: "Jamo Studio-VERSION-arm64-mac.zip" or "Jamo Studio-VERSION-mac.zip" (x64)
+  if [ "$ARCH" = "arm64" ]; then
+    artifact="Jamo Studio-${VERSION}-arm64-mac.zip"
+  else
+    artifact="Jamo Studio-${VERSION}-mac.zip"
+  fi
+
+  url="https://github.com/$REPO/releases/download/v${VERSION}/$(echo "$artifact" | sed 's/ /%20/g')"
+  tmp="$(mktemp -d)"
+
+  download "$url" "$tmp/$artifact"
 
   info "Installing to $APP_DIR..."
   unzip -qo "$tmp/$artifact" -d "$tmp"
 
-  # Move .app to Applications
-  local app="$(find "$tmp" -name '*.app' -maxdepth 2 | head -1)"
+  local app
+  app="$(find "$tmp" -name '*.app' -maxdepth 2 | head -1)"
   if [ -n "$app" ]; then
     [ -d "$APP_DIR/Jamo Studio.app" ] && rm -rf "$APP_DIR/Jamo Studio.app"
     mv "$app" "$APP_DIR/Jamo Studio.app"
@@ -60,13 +80,29 @@ install_mac() {
 }
 
 install_linux() {
-  local artifact="Jamo-Studio-${VERSION}-${ARCH}.AppImage"
-  local url="https://github.com/$REPO/releases/download/v${VERSION}/${artifact}"
+  local artifact url install_dir
 
-  info "Downloading $artifact..."
-  sudo curl -fSL "$url" -o "$INSTALL_DIR/jamo-studio" || error "Download failed."
-  sudo chmod +x "$INSTALL_DIR/jamo-studio"
-  info "Installed to $INSTALL_DIR/jamo-studio"
+  # electron-builder names: "Jamo Studio-VERSION-arm64.AppImage" or "Jamo Studio-VERSION.AppImage" (x64)
+  if [ "$ARCH" = "arm64" ]; then
+    artifact="Jamo Studio-${VERSION}-arm64.AppImage"
+  else
+    artifact="Jamo Studio-${VERSION}.AppImage"
+  fi
+
+  url="https://github.com/$REPO/releases/download/v${VERSION}/$(echo "$artifact" | sed 's/ /%20/g')"
+
+  install_dir="${HOME}/.local/bin"
+  mkdir -p "$install_dir"
+
+  download "$url" "$install_dir/jamo-studio"
+  chmod +x "$install_dir/jamo-studio"
+  info "Installed to $install_dir/jamo-studio"
+
+  # Check if ~/.local/bin is in PATH
+  case ":$PATH:" in
+    *":$install_dir:"*) ;;
+    *) info "Add $install_dir to your PATH if it's not already there" ;;
+  esac
 }
 
 main() {
