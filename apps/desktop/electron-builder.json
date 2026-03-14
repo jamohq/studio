@@ -13,12 +13,31 @@
       "from": "../../proto",
       "to": "proto",
       "filter": ["**/*.proto"]
+    },
+    {
+      "from": "bin/jamo-engine",
+      "to": "bin/jamo-engine"
     }
   ],
   "mac": {
-    "target": "dmg"
+    "target": [
+      { "target": "dmg", "arch": ["x64", "arm64"] },
+      { "target": "zip", "arch": ["x64", "arm64"] }
+    ],
+    "icon": "assets/icon.icns",
+    "category": "public.app-category.developer-tools"
   },
   "linux": {
-    "target": "AppImage"
+    "target": [
+      { "target": "AppImage", "arch": ["x64", "arm64"] },
+      { "target": "deb", "arch": ["x64", "arm64"] }
+    ],
+    "icon": "assets/icon.png",
+    "category": "Development"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "jamohq",
+    "repo": "studio"
   }
 }
