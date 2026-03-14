@@ -35,6 +35,16 @@
     "icon": "assets/icon.png",
     "category": "Development"
   },
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64", "arm64"] }
+    ],
+    "icon": "assets/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  },
   "publish": {
     "provider": "github",
     "owner": "jamohq",
