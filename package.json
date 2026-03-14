@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter jamo-desktop dev",
+    "test": "cd engine && go test -race ./... && cd ../apps/desktop && npx tsc --noEmit",
     "postinstall": "bash scripts/patch-electron-name.sh"
   },
   "pnpm": {

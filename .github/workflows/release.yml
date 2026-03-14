@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test-go:
+    name: Go tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+
+      - name: Run tests
+        working-directory: engine
+        run: go test -race -count=1 ./...
+
+  test-frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        working-directory: apps/desktop
+        run: npx tsc --noEmit
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: [test-go, test-frontend]
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            go-targets: |
+              darwin/arm64
+              darwin/amd64
+          - os: ubuntu-latest
+            platform: linux
+            go-targets: |
+              linux/amd64
+              linux/arm64
+          - os: windows-latest
+            platform: win
+            go-targets: |
+              windows/amd64
+              windows/arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: engine/go.mod
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Go engine
+        shell: bash
+        working-directory: engine
+        run: |
+          mkdir -p ../apps/desktop/bin
+          while IFS='/' read -r goos goarch; do
+            [ -z "$goos" ] && continue
+            ext=""
+            [ "$goos" = "windows" ] && ext=".exe"
+            echo "Building $goos/$goarch..."
+            GOOS="$goos" GOARCH="$goarch" go build \
+              -ldflags="-s -w" \
+              -o "../apps/desktop/bin/jamo-engine-${goos}-${goarch}${ext}" \
+              ./cmd/jamo-engine
+          done <<< "${{ matrix.go-targets }}"
+          # Copy the native-arch binary as the default
+          if [ "${{ matrix.platform }}" = "mac" ]; then
+            cp ../apps/desktop/bin/jamo-engine-darwin-arm64 ../apps/desktop/bin/jamo-engine
+          elif [ "${{ matrix.platform }}" = "linux" ]; then
+            cp ../apps/desktop/bin/jamo-engine-linux-amd64 ../apps/desktop/bin/jamo-engine
+          elif [ "${{ matrix.platform }}" = "win" ]; then
+            cp ../apps/desktop/bin/jamo-engine-windows-amd64.exe ../apps/desktop/bin/jamo-engine.exe
+          fi
+
+      - name: Build Electron app
+        working-directory: apps/desktop
+        run: pnpm run build
+
+      - name: Package (macOS)
+        if: matrix.platform == 'mac'
+        working-directory: apps/desktop
+        run: npx electron-builder --mac --publish never
+
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: apps/desktop
+        run: npx electron-builder --linux --publish never
+
+      - name: Package (Windows)
+        if: matrix.platform == 'win'
+        working-directory: apps/desktop
+        run: npx electron-builder --win --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            apps/desktop/out/*.dmg
+            apps/desktop/out/*.zip
+            apps/desktop/out/*.AppImage
+            apps/desktop/out/*.deb
+            apps/desktop/out/*.exe
+            apps/desktop/out/*.yml
+          if-no-files-found: warn
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            artifacts/*
