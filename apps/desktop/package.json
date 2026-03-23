@@ -4,7 +4,10 @@
   "version": "0.1.1",
   "description": "Design, code, and ship — all in one local-first desktop app.",
   "homepage": "https://github.com/jamohq/studio",
-  "author": "jamohq",
+  "author": {
+    "name": "jamohq",
+    "email": "go.jhson@gmail.com"
+  },
   "license": "AGPL-3.0",
   "private": true,
   "main": "dist/main/index.js",

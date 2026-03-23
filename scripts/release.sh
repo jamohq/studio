@@ -66,9 +66,13 @@ fs.writeFileSync('$PKG', JSON.stringify(pkg, null, 2) + '\n');
 
 echo "Updated $PKG to $NEW"
 
-# Commit, tag, push
+# Commit (skip if version was already set), tag, push
 git add "$PKG"
-git commit -m "Release $TAG"
+if git diff --cached --quiet; then
+  echo "Version already $NEW in $PKG, skipping commit"
+else
+  git commit -m "Release $TAG"
+fi
 git tag "$TAG"
 
 echo ""
