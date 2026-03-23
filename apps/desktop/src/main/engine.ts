@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,15 +16,13 @@ export type OnEngineCrash = (code: number | null, signal: string | null) => void
 const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_BASE_DELAY_MS = 1000;
 
-const isDev = process.env.NODE_ENV !== 'production';
-
 /**
  * Resolve the engine binary path.
  * - Production: packaged binary in extraResources (bin/jamo-engine)
  * - Development: uses `go run` instead (see startEngine)
  */
 function resolveEngineBinary(): string | null {
-  if (isDev) return null;
+  if (!app.isPackaged) return null;
 
   const ext = process.platform === 'win32' ? '.exe' : '';
   // electron-builder puts extraResources under process.resourcesPath
