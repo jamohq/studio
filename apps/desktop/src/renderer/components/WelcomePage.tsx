@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import iconPng from '../assets/icon.png';
 import { useTheme } from '../theme';
 import { Sun, Moon } from 'lucide-react';
 import { Button } from './ui/button';
@@ -68,7 +69,7 @@ export default function WelcomePage({ onOpenFolder, onCreateEmpty, onCreateSampl
 
       {/* Logo / Title */}
       <div className="text-center mb-4 flex flex-col items-center">
-        <img src="/icon.png" alt="Jamo" className="w-16 h-16 mb-2" />
+        <img src={iconPng} alt="Jamo" className="w-16 h-16 mb-2" />
         <div className="text-[22px] font-semibold text-foreground mt-1">Jamo Studio</div>
       </div>
 
