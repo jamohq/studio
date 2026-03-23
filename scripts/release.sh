@@ -28,6 +28,14 @@ fi
 
 git pull origin main
 
+# Verify dev is fully merged into main
+git fetch origin dev 2>/dev/null || true
+if [ -n "$(git log main..origin/dev --oneline 2>/dev/null)" ]; then
+  echo "Error: origin/dev has commits not yet merged into main."
+  echo "Create a PR from dev -> main first, then release."
+  exit 1
+fi
+
 # Read current version
 PKG="apps/desktop/package.json"
 CURRENT=$(node -p "require('./$PKG').version")
