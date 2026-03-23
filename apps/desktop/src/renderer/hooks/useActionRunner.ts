@@ -33,7 +33,9 @@ const CLAUDE_CMD =
 
 /** Content of the wrapper script written before launching the action.
  *  Uses -p (print mode) so claude exits after completing instead of waiting for input.
- *  Pipes through tee to capture output; pipefail ensures claude's exit code is preserved. */
+ *  Pipes through tee to capture output; pipefail ensures claude's exit code is preserved.
+ *  Note: $(cat ...) in double quotes is safe — the shell does not re-evaluate the output
+ *  of command substitution, so prompt content cannot cause injection. */
 const RUN_SCRIPT =
   '#!/bin/bash\nset -o pipefail\nclaude -p --dangerously-skip-permissions --append-system-prompt "$(cat .jamo/.prompt)" "Begin." | tee .jamo/.output\n';
 
@@ -103,7 +105,18 @@ export function useActionRunner(
         const match = res.content.match(/(\d+)/);
         if (match) {
           const code = parseInt(match[1], 10);
-          setActionStatus(code === 0 ? 'done' : 'error');
+          const newStatus = code === 0 ? 'done' : 'error';
+          setActionStatus(newStatus);
+
+          // Auto-commit on successful completion (tag auto-classified by smart-commit)
+          if (newStatus === 'done') {
+            window.jamo.smartCommit(workspaceId, {
+              tag: 'auto-code',
+              description: actionLabel || 'Terminal action',
+              source: 'action',
+            }).catch((err: any) => console.error('[ActionRunner] Auto-commit failed:', err));
+          }
+
           setTimeout(
             () => setActionStatus((s) => (s === 'done' || s === 'error' ? 'idle' : s)),
             STATUS_RESET_DELAY_MS,
@@ -115,7 +128,7 @@ export function useActionRunner(
     }, ACTION_POLL_MS);
 
     return () => clearInterval(interval);
-  }, [actionStatus, workspaceId]);
+  }, [actionStatus, workspaceId, actionLabel]);
 
   return { actionStatus, actionLabel, sendActionToTerminal };
 }

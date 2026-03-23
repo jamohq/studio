@@ -55,14 +55,16 @@ export default function WelcomePage({ onOpenFolder, onCreateEmpty, onCreateSampl
 
   return (
     <div className="relative flex flex-col items-center justify-center w-full h-full gap-6 p-10">
-      {/* Theme toggle */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 p-2 rounded-md text-foreground-muted hover:text-foreground hover:bg-accent-bg transition-colors"
-        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-      >
-        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
+      {/* Top-right actions */}
+      <div className="absolute top-4 right-4 flex items-center gap-1">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-md text-foreground-muted hover:text-foreground hover:bg-accent-bg transition-colors"
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+      </div>
 
       {/* Logo / Title */}
       <div className="text-center mb-4 flex flex-col items-center">

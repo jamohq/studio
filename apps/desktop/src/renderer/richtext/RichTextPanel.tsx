@@ -22,6 +22,7 @@ export default function RichTextPanel({ workspaceId, filePath, onClose, readOnly
   const [saved, setSaved] = useState(false);
   const docRef = useRef<RichTextDocument | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadingContent = useRef(true);
   const section = findSection(filePath);
 
   const editor = useEditor({
@@ -58,10 +59,11 @@ export default function RichTextPanel({ workspaceId, filePath, onClose, readOnly
   const saveRef = useRef(save);
   saveRef.current = save;
 
-  // Autosave on editor changes
+  // Autosave on editor changes (skip the initial setContent during load)
   useEffect(() => {
     if (!editor) return;
     const handler = () => {
+      if (loadingContent.current) return;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => saveRef.current(), AUTOSAVE_DELAY_MS);
     };
@@ -78,7 +80,10 @@ export default function RichTextPanel({ workspaceId, filePath, onClose, readOnly
         const res = await window.jamo.readFile(workspaceId, filePath);
         const parsed: RichTextDocument = JSON.parse(res.content);
         docRef.current = parsed;
+        loadingContent.current = true;
         editor.commands.setContent(parsed.content);
+        // Allow the update event from setContent to fire before re-enabling autosave
+        requestAnimationFrame(() => { loadingContent.current = false; });
       } catch (err) {
         console.error('Failed to load rich text document:', filePath, err);
       } finally {

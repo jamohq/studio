@@ -103,9 +103,48 @@ func TestResolvePath_EscapeSandbox(t *testing.T) {
 	b, dir := newTestBusiness(t)
 	ws := openTestWorkspace(t, b, dir)
 
-	_, err := b.ResolvePath(ws.ID, "../../etc/passwd")
-	if err == nil {
-		t.Fatal("expected error for path escaping sandbox")
+	cases := []string{
+		"../../etc/passwd",
+		"../sibling",
+		"foo/../../..",
+		"foo/../../../etc",
+		"..",
+		"../",
+	}
+	for _, relPath := range cases {
+		_, err := b.ResolvePath(ws.ID, relPath)
+		if err == nil {
+			t.Errorf("expected error for path escaping sandbox: %q", relPath)
+		}
+	}
+}
+
+func TestResolvePath_AllowsDotJamo(t *testing.T) {
+	b, dir := newTestBusiness(t)
+	ws := openTestWorkspace(t, b, dir)
+
+	// Paths within the workspace should be allowed, including dotfiles.
+	resolved, err := b.ResolvePath(ws.ID, ".jamo/runs/test.json")
+	if err != nil {
+		t.Fatalf("unexpected error for .jamo path: %v", err)
+	}
+	expected := filepath.Join(dir, ".jamo/runs/test.json")
+	if resolved != expected {
+		t.Fatalf("expected %q, got %q", expected, resolved)
+	}
+}
+
+func TestResolvePath_WorkspaceRootItself(t *testing.T) {
+	b, dir := newTestBusiness(t)
+	ws := openTestWorkspace(t, b, dir)
+
+	// Resolving "." should return the workspace root.
+	resolved, err := b.ResolvePath(ws.ID, ".")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved != dir {
+		t.Fatalf("expected %q, got %q", dir, resolved)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -91,11 +92,10 @@ func (b *Business) ResolvePath(wsID, relPath string) (string, error) {
 	}
 
 	// Sandbox check: ensure resolved path is within workspace root.
-	rel, err := filepath.Rel(ws.Path, absPath)
-	if err != nil {
-		return "", errs.Newf(codes.InvalidArgument, "path resolution error: %s", err)
-	}
-	if rel == ".." || len(rel) > 1 && rel[:2] == ".." {
+	// Use the canonical workspace path with a trailing separator to prevent
+	// prefix-matching against siblings (e.g. /workspace-evil matching /workspace).
+	wsPrefix := ws.Path + string(filepath.Separator)
+	if absPath != ws.Path && !strings.HasPrefix(absPath, wsPrefix) {
 		return "", errs.New(codes.PermissionDenied, fmt.Sprintf("path escapes workspace: %s", relPath))
 	}
 

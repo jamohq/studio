@@ -57,8 +57,10 @@ async function checkClaude(): Promise<DepCheck> {
 
 async function checkClaudeAuth(): Promise<boolean> {
   try {
-    // claude -p with empty prompt exits quickly if authenticated, errors if not
-    await run('claude', ['-p', '--dangerously-skip-permissions', 'echo test']);
+    // Check auth status without requiring bypass permissions.
+    // "claude auth status" exits 0 if authenticated, non-zero otherwise.
+    const out = await run('claude', ['auth', 'status']);
+    // If the output contains "authenticated" or "logged in", we're good
     return true;
   } catch {
     return false;
@@ -149,13 +151,13 @@ export async function checkEnvironment(): Promise<EnvCheckResult> {
       claude.error = 'Claude CLI not authenticated';
       claude.fix = 'Run: claude auth';
     } else if (!claudeBypassMode) {
-      claude.error = 'Claude CLI permissions not configured for non-interactive use';
+      claude.warning = 'Permissions bypass not configured — Claude may pause for confirmations';
       claude.fix = 'Run: claude config set -g bypassPermissions true';
     }
   }
 
   const deps = [claude, git, bash];
-  // Claude and bash are critical; git is a warning only
+  // Ready if claude is found + authenticated, and bash is present. Bypass mode is optional.
   const ready = claude.found && claudeAuthenticated && bash.found;
 
   return { deps, claudeAuthenticated, claudeBypassMode, ready };

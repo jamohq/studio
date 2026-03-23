@@ -50,6 +50,65 @@
   }
 }
 
+/* Chat markdown */
+.chat-markdown {
+  @apply text-[13px] leading-relaxed;
+}
+.chat-markdown p {
+  @apply mb-2 last:mb-0;
+}
+.chat-markdown h1 {
+  @apply text-base font-bold mt-3 mb-1.5 first:mt-0;
+}
+.chat-markdown h2 {
+  @apply text-sm font-bold mt-3 mb-1 first:mt-0;
+}
+.chat-markdown h3 {
+  @apply text-[13px] font-semibold mt-2.5 mb-1 first:mt-0;
+}
+.chat-markdown ul {
+  @apply list-disc pl-5 mb-2;
+}
+.chat-markdown ol {
+  @apply list-decimal pl-5 mb-2;
+}
+.chat-markdown li {
+  @apply mb-0.5;
+}
+.chat-markdown li > p {
+  @apply mb-0;
+}
+.chat-markdown code {
+  @apply text-[12px] font-mono bg-background/50 px-1 py-0.5 rounded;
+}
+.chat-markdown pre {
+  @apply bg-background/50 rounded-md p-2.5 my-2 overflow-x-auto;
+}
+.chat-markdown pre code {
+  @apply bg-transparent p-0;
+}
+.chat-markdown table {
+  @apply w-full text-[12px] my-2 border-collapse;
+}
+.chat-markdown th {
+  @apply text-left font-semibold border-b border-border px-2 py-1;
+}
+.chat-markdown td {
+  @apply border-b border-border/50 px-2 py-1;
+}
+.chat-markdown hr {
+  @apply border-border my-3;
+}
+.chat-markdown strong {
+  @apply font-semibold;
+}
+.chat-markdown a {
+  @apply text-accent underline;
+}
+.chat-markdown blockquote {
+  @apply border-l-2 border-accent/30 pl-3 text-foreground-muted my-2;
+}
+
 /* CodeMirror editor */
 .cm-editor {
   height: 100%;
