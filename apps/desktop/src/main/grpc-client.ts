@@ -1,3 +1,4 @@
+import { app } from 'electron';
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import * as path from 'path';
@@ -11,15 +12,13 @@ export interface GrpcClients {
   git: any;
 }
 
-const isDev = process.env.NODE_ENV !== 'production';
-
 /**
  * Resolve the proto directory.
  * - Production: packaged in extraResources (proto/)
  * - Development: relative to __dirname going up to repo root
  */
 function resolveProtoDir(): string {
-  if (!isDev) {
+  if (app.isPackaged) {
     return path.join(process.resourcesPath, 'proto');
   }
   return path.resolve(__dirname, '..', '..', '..', '..', 'proto');

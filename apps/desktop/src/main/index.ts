@@ -151,8 +151,7 @@ async function createWindow() {
   registerIpcHandlers(mainWindow);
 
   // Load the UI immediately so the user sees something.
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev) {
+  if (!app.isPackaged) {
     await mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {

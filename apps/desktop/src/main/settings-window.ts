@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
 
 let settingsWindow: BrowserWindow | null = null;
@@ -28,8 +28,7 @@ export function createSettingsWindow(): void {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
   });
 
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev) {
+  if (!app.isPackaged) {
     settingsWindow.loadURL('http://localhost:5173/settings.html');
   } else {
     settingsWindow.loadFile(path.join(__dirname, '..', 'renderer', 'settings.html'));
