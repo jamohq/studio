@@ -29,6 +29,7 @@ interface ChatPanelProps {
   onFileClick: (path: string) => void;
   onSaveLog?: () => Promise<void>;
   openFile: string | null;
+  showHeader?: boolean;
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -85,6 +86,7 @@ export default function ChatPanel({
   onFileClick,
   onSaveLog,
   openFile,
+  showHeader = true,
 }: ChatPanelProps) {
   const { toast } = useToast();
   const listRef = useRef<HTMLDivElement>(null);
@@ -112,63 +114,65 @@ export default function ChatPanel({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
-        <span className="px-2 py-0.5 text-[11px] font-semibold uppercase text-foreground">
-          Chat
-        </span>
-
-        {status === 'running' && (
-          <span className="flex items-center gap-1.5 text-[11px] text-accent">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
-            </span>
-            <span className="text-foreground-dim">{formatElapsed(elapsedSeconds)}</span>
+      {/* Header — hidden when embedded in tabbed panel */}
+      {showHeader && (
+        <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
+          <span className="px-2 py-0.5 text-[11px] font-semibold uppercase text-foreground">
+            Chat
           </span>
-        )}
 
-        <div className="flex-1" />
+          {status === 'running' && (
+            <span className="flex items-center gap-1.5 text-[11px] text-accent">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
+              </span>
+              <span className="text-foreground-dim">{formatElapsed(elapsedSeconds)}</span>
+            </span>
+          )}
 
-        {messages.length > 0 && onSaveLog && (
+          <div className="flex-1" />
+
+          {messages.length > 0 && onSaveLog && (
+            <button
+              onClick={handleSaveLog}
+              disabled={saving}
+              title="Save chat log"
+              className="h-6 px-1.5 flex items-center text-[10px] text-foreground-dim hover:text-foreground-muted"
+            >
+              {saving ? 'Saving...' : 'Save Log'}
+            </button>
+          )}
+
+          {messages.length > 0 && (
+            <button
+              onClick={onClear}
+              title="Clear chat"
+              className="h-6 px-1.5 flex items-center text-[10px] text-foreground-dim hover:text-foreground-muted"
+            >
+              Clear
+            </button>
+          )}
+
+          {status === 'running' && (
+            <button
+              onClick={onCancel}
+              title="Cancel"
+              className="h-6 px-1.5 flex items-center text-[10px] text-red-400 hover:text-red-300"
+            >
+              Cancel
+            </button>
+          )}
+
           <button
-            onClick={handleSaveLog}
-            disabled={saving}
-            title="Save chat log"
-            className="h-6 px-1.5 flex items-center text-[10px] text-foreground-dim hover:text-foreground-muted"
+            onClick={onClose}
+            title="Close chat"
+            className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
           >
-            {saving ? 'Saving...' : 'Save Log'}
+            <span className="text-sm leading-none">&times;</span>
           </button>
-        )}
-
-        {messages.length > 0 && (
-          <button
-            onClick={onClear}
-            title="Clear chat"
-            className="h-6 px-1.5 flex items-center text-[10px] text-foreground-dim hover:text-foreground-muted"
-          >
-            Clear
-          </button>
-        )}
-
-        {status === 'running' && (
-          <button
-            onClick={onCancel}
-            title="Cancel"
-            className="h-6 px-1.5 flex items-center text-[10px] text-red-400 hover:text-red-300"
-          >
-            Cancel
-          </button>
-        )}
-
-        <button
-          onClick={onClose}
-          title="Close chat"
-          className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
-        >
-          <span className="text-sm leading-none">&times;</span>
-        </button>
-      </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={listRef} className="flex-1 overflow-auto px-3 py-3 space-y-3">
