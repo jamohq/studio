@@ -113,7 +113,11 @@ export default function App() {
 
   // -- Chat -------------------------------------------------------------------
   const chat = useChat(workspace.workspaceId, workspace.openFile);
-  const [chatOpen, setChatOpen] = useState(false);
+
+  // -- Unified bottom panel (Terminal + Chat) --------------------------------
+  type BottomTab = 'terminal' | 'run' | 'chat';
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(false);
+  const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>('terminal');
 
   // -- Activity feed -----------------------------------------------------------
   const activityFeed = useActivityFeed(workspace.workspaceId, actionStatus, actionLabel);
@@ -214,9 +218,8 @@ export default function App() {
 
   const showSidebar = activePanel && activePanel !== 'source-control';
   const showActivityPanel = activityFeed.visible;
-  const showTerminalPanel = terminal.terminalMounted && terminal.terminalOpen && !showActivityPanel;
-  const showChatPanel = chatOpen && !showActivityPanel;
-  const showRightPanel = showActivityPanel || showTerminalPanel || showChatPanel;
+  const showBottomPanel = bottomPanelOpen && !showActivityPanel;
+  const showRightPanel = showActivityPanel || showBottomPanel;
 
   // -- Main layout ------------------------------------------------------------
   return (
@@ -264,12 +267,29 @@ export default function App() {
                 Open Project
               </Button>
               <HintTooltip id={HINTS.chatBtn.id} content={HINTS.chatBtn.content} side={HINTS.chatBtn.side} disabled={tour.active}>
-                <Button variant="outline" size="sm" onClick={() => setChatOpen((prev) => !prev)} title={chatOpen ? 'Close chat' : 'Open chat'} data-tour="chat-btn" className={cn('text-[11px] h-7', chatOpen && 'text-accent')}>
+                <Button variant="outline" size="sm" onClick={() => {
+                  if (bottomPanelOpen && activeBottomTab === 'chat') {
+                    setBottomPanelOpen(false);
+                  } else {
+                    setBottomPanelOpen(true);
+                    setActiveBottomTab('chat');
+                    if (showActivityPanel) activityFeed.dismiss();
+                  }
+                }} title={bottomPanelOpen && activeBottomTab === 'chat' ? 'Close chat' : 'Open chat'} data-tour="chat-btn" className={cn('text-[11px] h-7', bottomPanelOpen && activeBottomTab === 'chat' && 'text-accent')}>
                   Chat
                 </Button>
               </HintTooltip>
               <HintTooltip id={HINTS.terminalBtn.id} content={HINTS.terminalBtn.content} side={HINTS.terminalBtn.side} disabled={tour.active}>
-                <Button variant="outline" size="sm" onClick={() => { if (showActivityPanel) { activityFeed.dismiss(); terminal.openTerminal(); } else { terminal.toggleTerminal(); } }} title={terminal.terminalOpen ? 'Close terminal' : 'Open terminal'} data-tour="terminal-btn" className={cn('text-[11px] h-7', (terminal.terminalOpen || showActivityPanel) && 'text-accent')}>
+                <Button variant="outline" size="sm" onClick={() => {
+                  if (bottomPanelOpen && (activeBottomTab === 'terminal' || activeBottomTab === 'run')) {
+                    setBottomPanelOpen(false);
+                  } else {
+                    setBottomPanelOpen(true);
+                    setActiveBottomTab('terminal');
+                    terminal.mountTerminal();
+                    if (showActivityPanel) activityFeed.dismiss();
+                  }
+                }} title={bottomPanelOpen && activeBottomTab === 'terminal' ? 'Close terminal' : 'Open terminal'} data-tour="terminal-btn" className={cn('text-[11px] h-7', bottomPanelOpen && (activeBottomTab === 'terminal' || activeBottomTab === 'run') && 'text-accent')}>
                   Terminal
                 </Button>
               </HintTooltip>
@@ -367,7 +387,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Right panel: Activity or Terminal */}
+              {/* Right panel: Activity or Tabbed panel (Terminal / Run / Chat) */}
               {showRightPanel && (
                 <>
                   <ResizeHandle onMouseDown={(e) => terminalResize.startDrag(e, -1)} />
@@ -382,33 +402,15 @@ export default function App() {
                         onDismiss={activityFeed.dismiss}
                       />
                     )}
-                    {showChatPanel && (
-                      <ChatPanel
-                        workspaceId={workspace.workspaceId}
-                        messages={chat.messages}
-                        status={chat.status}
-                        errorMessage={chat.errorMessage}
-                        fileChanges={chat.fileChanges}
-                        currentActivity={chat.currentActivity}
-                        elapsedSeconds={chat.elapsedSeconds}
-                        onSend={chat.sendMessage}
-                        onCancel={chat.cancelRun}
-                        onClear={chat.clearChat}
-                        onClose={() => setChatOpen(false)}
-                        onFileClick={workspace.handleOpenFile}
-                        onSaveLog={chat.saveLog}
-                        openFile={workspace.openFile}
-                      />
-                    )}
-                    {terminal.terminalMounted && (
-                      <div className={cn('flex-1 flex flex-col overflow-hidden', (showActivityPanel || showChatPanel) && 'hidden')}>
-                        {/* Tab bar */}
+                    {showBottomPanel && (
+                      <div className="flex-1 flex flex-col overflow-hidden">
+                        {/* Unified tab bar */}
                         <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
                           <button
-                            onClick={() => terminal.setActiveTerminalTab('claude')}
+                            onClick={() => { setActiveBottomTab('terminal'); terminal.mountTerminal(); }}
                             className={cn(
                               'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
-                              terminal.activeTerminalTab === 'claude'
+                              activeBottomTab === 'terminal'
                                 ? 'text-foreground bg-background-deep'
                                 : 'text-foreground-dim hover:text-foreground-muted',
                             )}
@@ -417,10 +419,10 @@ export default function App() {
                           </button>
                           {run.runTerminalMounted && (
                             <button
-                              onClick={() => terminal.setActiveTerminalTab('run')}
+                              onClick={() => setActiveBottomTab('run')}
                               className={cn(
                                 'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
-                                terminal.activeTerminalTab === 'run'
+                                activeBottomTab === 'run'
                                   ? 'text-foreground bg-background-deep'
                                   : 'text-foreground-dim hover:text-foreground-muted',
                               )}
@@ -429,30 +431,72 @@ export default function App() {
                               {run.runState === 'running' && <span className="ml-1 text-success">●</span>}
                             </button>
                           )}
-                          <div className="flex-1" />
                           <button
-                            onClick={terminal.closeTerminal}
-                            title="Close terminal"
+                            onClick={() => setActiveBottomTab('chat')}
+                            className={cn(
+                              'px-2 py-0.5 text-[11px] font-semibold uppercase rounded',
+                              activeBottomTab === 'chat'
+                                ? 'text-foreground bg-background-deep'
+                                : 'text-foreground-dim hover:text-foreground-muted',
+                            )}
+                          >
+                            Chat
+                          </button>
+
+                          {/* Chat status indicator */}
+                          {activeBottomTab === 'chat' && chat.status === 'running' && (
+                            <span className="flex items-center gap-1.5 text-[11px] text-accent">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-accent" />
+                              </span>
+                              <span className="text-foreground-dim">{chat.elapsedSeconds}s</span>
+                            </span>
+                          )}
+
+                          <div className="flex-1" />
+
+                          {/* Chat action buttons — only when Chat tab active */}
+                          {activeBottomTab === 'chat' && (
+                            <>
+                              {chat.messages.length > 0 && (
+                                <button onClick={chat.clearChat} title="Clear chat" className="h-6 px-1.5 flex items-center text-[10px] text-foreground-dim hover:text-foreground-muted">
+                                  Clear
+                                </button>
+                              )}
+                              {chat.status === 'running' && (
+                                <button onClick={chat.cancelRun} title="Cancel" className="h-6 px-1.5 flex items-center text-[10px] text-red-400 hover:text-red-300">
+                                  Cancel
+                                </button>
+                              )}
+                            </>
+                          )}
+
+                          <button
+                            onClick={() => setBottomPanelOpen(false)}
+                            title="Close panel"
                             className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
                           >
                             <span className="text-sm leading-none">&times;</span>
                           </button>
                         </div>
 
-                        {/* Claude terminal */}
-                        <div className={cn('flex-1 overflow-hidden', terminal.activeTerminalTab !== 'claude' && 'hidden')}>
-                          <TerminalPanel
-                            workspaceId={workspace.workspaceId}
-                            onClose={terminal.closeTerminal}
-                            onSessionReady={terminal.handleSessionReady}
-                            onSessionEnd={terminal.handleSessionEnd}
-                            showHeader={false}
-                          />
+                        {/* Terminal tab content */}
+                        <div className={cn('flex-1 overflow-hidden', activeBottomTab !== 'terminal' && 'hidden')}>
+                          {terminal.terminalMounted && (
+                            <TerminalPanel
+                              workspaceId={workspace.workspaceId}
+                              onClose={() => setBottomPanelOpen(false)}
+                              onSessionReady={terminal.handleSessionReady}
+                              onSessionEnd={terminal.handleSessionEnd}
+                              showHeader={false}
+                            />
+                          )}
                         </div>
 
-                        {/* Run terminal */}
+                        {/* Run tab content */}
                         {run.runTerminalMounted && (
-                          <div className={cn('flex-1 overflow-hidden', terminal.activeTerminalTab !== 'run' && 'hidden')}>
+                          <div className={cn('flex-1 overflow-hidden', activeBottomTab !== 'run' && 'hidden')}>
                             <RunTerminalPanel
                               workspaceId={workspace.workspaceId}
                               onSessionReady={run.handleRunSessionReady}
@@ -460,6 +504,27 @@ export default function App() {
                             />
                           </div>
                         )}
+
+                        {/* Chat tab content */}
+                        <div className={cn('flex-1 overflow-hidden', activeBottomTab !== 'chat' && 'hidden')}>
+                          <ChatPanel
+                            workspaceId={workspace.workspaceId}
+                            messages={chat.messages}
+                            status={chat.status}
+                            errorMessage={chat.errorMessage}
+                            fileChanges={chat.fileChanges}
+                            currentActivity={chat.currentActivity}
+                            elapsedSeconds={chat.elapsedSeconds}
+                            onSend={chat.sendMessage}
+                            onCancel={chat.cancelRun}
+                            onClear={chat.clearChat}
+                            onClose={() => setBottomPanelOpen(false)}
+                            onFileClick={workspace.handleOpenFile}
+                            onSaveLog={chat.saveLog}
+                            openFile={workspace.openFile}
+                            showHeader={false}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
