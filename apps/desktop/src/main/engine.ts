@@ -1,4 +1,5 @@
 import { spawn, ChildProcess } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 
@@ -14,14 +15,42 @@ export type OnEngineCrash = (code: number | null, signal: string | null) => void
 const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_BASE_DELAY_MS = 1000;
 
+const isDev = process.env.NODE_ENV !== 'production';
+
+/**
+ * Resolve the engine binary path.
+ * - Production: packaged binary in extraResources (bin/jamo-engine)
+ * - Development: uses `go run` instead (see startEngine)
+ */
+function resolveEngineBinary(): string | null {
+  if (isDev) return null;
+
+  const ext = process.platform === 'win32' ? '.exe' : '';
+  // electron-builder puts extraResources under process.resourcesPath
+  const binPath = path.join(process.resourcesPath, 'bin', `jamo-engine${ext}`);
+  if (fs.existsSync(binPath)) return binPath;
+
+  return null;
+}
+
 export function startEngine(onCrash?: OnEngineCrash): Promise<EngineHandle> {
   return new Promise((resolve, reject) => {
-    const engineDir = path.resolve(__dirname, '..', '..', '..', '..', 'engine');
+    let proc: ChildProcess;
+    const engineBin = resolveEngineBinary();
 
-    const proc = spawn('go', ['run', './cmd/jamo-engine'], {
-      cwd: engineDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    if (engineBin) {
+      // Production: spawn the pre-built binary directly.
+      proc = spawn(engineBin, [], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } else {
+      // Development: use go run.
+      const engineDir = path.resolve(__dirname, '..', '..', '..', '..', 'engine');
+      proc = spawn('go', ['run', './cmd/jamo-engine'], {
+        cwd: engineDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    }
 
     let port: number | null = null;
     let token: string | null = null;

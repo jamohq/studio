@@ -536,7 +536,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
       </div>
 
       {/* Sections */}
-      <div className="pb-1">
+      <div className="pb-1" data-tour="sections">
         {SECTIONS.map((section) => (
           <div
             key={section.id}
@@ -577,6 +577,7 @@ export default function CreatorPanel({ workspaceId, activeFile, onOpenFile, onFi
             onClick={handleDesignToCode}
             disabled={actionRunning}
             size="sm"
+            data-tour="build-code"
             className="w-full text-[11px] font-semibold h-8 bg-accent hover:bg-accent/90"
           >
             {actionRunning ? 'Running...' : 'Build Code'}

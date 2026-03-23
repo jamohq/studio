@@ -5,6 +5,7 @@ dist/
 
 # Go
 engine/jamo-engine
+apps/desktop/bin/
 
 # Electron
 apps/desktop/out/

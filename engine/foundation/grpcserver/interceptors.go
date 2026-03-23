@@ -35,8 +35,9 @@ func authStreamInterceptor(token string) grpc.StreamServerInterceptor {
 }
 
 func authenticate(ctx context.Context, token string, method string) error {
-	// Skip auth for health check.
-	if strings.HasSuffix(method, "HealthService/Ping") {
+	// Skip auth for health check. Use exact match to prevent bypass via
+	// crafted service names that end with the same suffix.
+	if method == "/jamo.v1.HealthService/Ping" {
 		return nil
 	}
 

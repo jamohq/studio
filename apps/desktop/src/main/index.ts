@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, shell, dialog, nativeImage, session } from 'e
 import * as path from 'path';
 import { startEngineWithRecovery, EngineHandle } from './engine';
 import { createClients } from './grpc-client';
-import { registerIpcHandlers } from './ipc-handlers';
+import { registerIpcHandlers, setGrpcClients, setActiveWindow, cleanupIpcResources } from './ipc-handlers';
 
 app.name = 'Jamo Studio';
 
@@ -40,7 +40,7 @@ function buildAppMenu() {
       label: 'File',
       submenu: [
         {
-          label: 'Open Project…',
+          label: 'Open Project\u2026',
           accelerator: 'CmdOrCtrl+O',
           click: async () => {
             const result = await dialog.showOpenDialog({
@@ -139,11 +139,16 @@ async function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* http://localhost:*; font-src 'self' data:",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* http://localhost:*; font-src 'self' data: https://esm.sh",
         ],
       },
     });
   });
+
+  // Register ALL IPC handlers immediately so the renderer never hits
+  // "No handler registered". gRPC-dependent handlers wait internally
+  // for the engine via getClients().
+  registerIpcHandlers(mainWindow);
 
   // Load the UI immediately so the user sees something.
   const isDev = process.env.NODE_ENV !== 'production';
@@ -162,7 +167,7 @@ async function createWindow() {
         console.log(`Engine restarted on port ${newHandle.port}`);
         engine = newHandle;
         const newClients = createClients(newHandle.port, newHandle.token);
-        registerIpcHandlers(newClients, mainWindow);
+        setGrpcClients(newClients);
         mainWindow.webContents.send('engine-restarted');
       },
       (error) => {
@@ -195,14 +200,14 @@ async function createWindow() {
       check();
     });
 
-    registerIpcHandlers(clients, mainWindow);
-    console.log('Engine ready, IPC handlers registered.');
+    setGrpcClients(clients);
+    console.log('Engine ready, gRPC clients available.');
   } catch (err) {
     console.error('Engine startup failed:', err);
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   buildAppMenu();
   return createWindow();
 }).catch((err) => {
@@ -210,6 +215,8 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  // Clean up streaming resources before killing the engine.
+  cleanupIpcResources();
   if (engine) {
     console.log('Stopping engine...');
     engine.process.kill();

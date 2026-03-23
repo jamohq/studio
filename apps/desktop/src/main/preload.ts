@@ -1,3 +1,4 @@
+export {};
 const { contextBridge, ipcRenderer } = require('electron');
 
 const api = {
@@ -78,6 +79,33 @@ const api = {
   gitCheckout: (wsId: string, paths?: string[]) =>
     ipcRenderer.invoke('jamo:git-checkout', wsId, paths || []),
 
+  smartCommit: (wsId: string, opts: any) =>
+    ipcRenderer.invoke('jamo:smart-commit', wsId, opts),
+
+  getCommitHistory: (wsId: string, limit?: number) =>
+    ipcRenderer.invoke('jamo:get-commit-history', wsId, limit),
+
+  gitDiffCommits: (wsId: string, fromRef: string, toRef: string) =>
+    ipcRenderer.invoke('jamo:git-diff-commits', wsId, fromRef, toRef),
+
+  gitRevertTo: (wsId: string, commitHash: string) =>
+    ipcRenderer.invoke('jamo:git-revert-to', wsId, commitHash),
+
+  gitAdd: (wsId: string, paths: string[]) =>
+    ipcRenderer.invoke('jamo:git-add', wsId, paths),
+
+  gitResetFiles: (wsId: string, paths: string[]) =>
+    ipcRenderer.invoke('jamo:git-reset-files', wsId, paths),
+
+  gitBranch: (wsId: string) =>
+    ipcRenderer.invoke('jamo:git-branch', wsId),
+
+  gitCommitStaged: (wsId: string, message: string) =>
+    ipcRenderer.invoke('jamo:git-commit-staged', wsId, message),
+
+  gitDiffStaged: (wsId: string, filePath?: string) =>
+    ipcRenderer.invoke('jamo:git-diff-staged', wsId, filePath),
+
   generate: (wsId: string, prompt: string) =>
     ipcRenderer.invoke('jamo:generate', wsId, prompt),
 
@@ -96,6 +124,24 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('jamo:open-external', url),
 
   checkEnvironment: () => ipcRenderer.invoke('jamo:check-environment'),
+
+  chatSend: (wsId: string, message: string, context: any, existingMessages?: any[]) =>
+    ipcRenderer.invoke('jamo:chat-send', wsId, message, context, existingMessages),
+
+  onChatStream: (cb: any) => {
+    const handler = (_event: any, chunk: any) => cb(chunk);
+    ipcRenderer.on('jamo:chat-stream', handler);
+    return () => ipcRenderer.removeListener('jamo:chat-stream', handler);
+  },
+
+  chatCancel: (runId: string) =>
+    ipcRenderer.invoke('jamo:chat-cancel', runId),
+
+  listRuns: (wsId: string, limit?: number) =>
+    ipcRenderer.invoke('jamo:list-runs', wsId, limit),
+
+  getRun: (wsId: string, runId: string) =>
+    ipcRenderer.invoke('jamo:get-run', wsId, runId),
 };
 
 contextBridge.exposeInMainWorld('jamo', api);

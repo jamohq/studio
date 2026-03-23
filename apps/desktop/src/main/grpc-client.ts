@@ -11,8 +11,22 @@ export interface GrpcClients {
   git: any;
 }
 
+const isDev = process.env.NODE_ENV !== 'production';
+
+/**
+ * Resolve the proto directory.
+ * - Production: packaged in extraResources (proto/)
+ * - Development: relative to __dirname going up to repo root
+ */
+function resolveProtoDir(): string {
+  if (!isDev) {
+    return path.join(process.resourcesPath, 'proto');
+  }
+  return path.resolve(__dirname, '..', '..', '..', '..', 'proto');
+}
+
 function loadProto(protoFile: string) {
-  const protoDir = path.resolve(__dirname, '..', '..', '..', '..', 'proto');
+  const protoDir = resolveProtoDir();
   const packageDefinition = protoLoader.loadSync(
     path.join(protoDir, 'jamo', 'v1', protoFile),
     {

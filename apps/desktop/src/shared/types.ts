@@ -56,10 +56,22 @@ export interface JamoEvent {
   timestampMs: number;
 }
 
+// Commit tag system
+export type CommitTag = 'auto-code' | 'auto-design' | 'manual-code' | 'manual-design' | 'chat-log';
+export type CommitSource = 'chat' | 'action' | 'manual';
+
+export interface CommitMetadata {
+  tag: CommitTag;
+  source: CommitSource;
+  runId?: string;
+}
+
 // Git types
 export interface ChangedFile {
   path: string;
   status: string;
+  /** 'staged' | 'partially-staged' | '' */
+  indexStatus?: string;
 }
 
 export interface GitStatusResponse {
@@ -80,10 +92,56 @@ export interface GitLogEntry {
   shortHash: string;
   message: string;
   timestamp: string;
+  meta?: CommitMetadata;
+  filesChanged?: number;
 }
 
 export interface GitLogResponse {
   entries: GitLogEntry[];
+}
+
+// Chat & Run types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  runId?: string;
+}
+
+export interface Run {
+  id: string;
+  type: 'chat';
+  status: 'running' | 'completed' | 'error' | 'cancelled';
+  input: {
+    message: string;
+    notes: string | null;
+    context: ChatContext;
+    parentRunId: string | null;
+  };
+  output: {
+    filesChanged: string[];
+    messageCount: number;
+  };
+  messages: ChatMessage[];
+  createdAt: string;
+  completedAt: string | null;
+}
+
+export interface ChatStreamChunk {
+  runId: string;
+  delta?: string;
+  fileChange?: string;
+  toolUse?: { name: string; input: string };
+  sessionId?: string;
+  status?: 'completed' | 'error' | 'cancelled';
+  error?: string;
+}
+
+export interface ChatContext {
+  openFile?: string;
+  openFileContent?: string;
+  projectSections?: Record<string, string>;
 }
 
 // IPC channel names
@@ -119,6 +177,21 @@ export const IPC = {
   CLEAR_DIR: 'jamo:clear-dir',
   OPEN_EXTERNAL: 'jamo:open-external',
   CHECK_ENVIRONMENT: 'jamo:check-environment',
+  CHAT_SEND: 'jamo:chat-send',
+  CHAT_STREAM: 'jamo:chat-stream',
+  CHAT_CANCEL: 'jamo:chat-cancel',
+  LIST_RUNS: 'jamo:list-runs',
+  GET_RUN: 'jamo:get-run',
+  // Smart commit
+  SMART_COMMIT: 'jamo:smart-commit',
+  GET_COMMIT_HISTORY: 'jamo:get-commit-history',
+  GIT_DIFF_COMMITS: 'jamo:git-diff-commits',
+  GIT_REVERT_TO: 'jamo:git-revert-to',
+  GIT_ADD: 'jamo:git-add',
+  GIT_RESET_FILES: 'jamo:git-reset-files',
+  GIT_BRANCH: 'jamo:git-branch',
+  GIT_COMMIT_STAGED: 'jamo:git-commit-staged',
+  GIT_DIFF_STAGED: 'jamo:git-diff-staged',
 } as const;
 
 // Environment check types
@@ -127,6 +200,7 @@ export interface DepCheck {
   found: boolean;
   version?: string;
   error?: string;
+  warning?: string;
   fix?: string;
   fixUrl?: string;
 }
@@ -169,8 +243,22 @@ export interface JamoAPI {
   gitCommit(wsId: string, message: string): Promise<GitCommitResponse>;
   gitLog(wsId: string, limit?: number): Promise<GitLogResponse>;
   gitCheckout(wsId: string, paths?: string[]): Promise<void>;
+  smartCommit(wsId: string, opts: { tag: CommitTag; description: string; source: CommitSource; runId?: string }): Promise<GitCommitResponse>;
+  getCommitHistory(wsId: string, limit?: number): Promise<GitLogResponse>;
+  gitDiffCommits(wsId: string, fromRef: string, toRef: string): Promise<{ files: Array<{ path: string; status: string }>; diff: string }>;
+  gitRevertTo(wsId: string, commitHash: string): Promise<GitCommitResponse>;
+  gitAdd(wsId: string, paths: string[]): Promise<void>;
+  gitResetFiles(wsId: string, paths: string[]): Promise<void>;
+  gitBranch(wsId: string): Promise<{ branch: string }>;
+  gitCommitStaged(wsId: string, message: string): Promise<GitCommitResponse>;
+  gitDiffStaged(wsId: string, filePath?: string): Promise<GitDiffResponse>;
   openExternal(url: string): Promise<void>;
   checkEnvironment(): Promise<EnvCheckResult>;
+  chatSend(wsId: string, message: string, context: ChatContext, existingMessages?: ChatMessage[]): Promise<{ runId: string }>;
+  onChatStream(cb: (chunk: ChatStreamChunk) => void): () => void;
+  chatCancel(runId: string): Promise<void>;
+  listRuns(wsId: string, limit?: number): Promise<Run[]>;
+  getRun(wsId: string, runId: string): Promise<Run>;
 }
 
 declare global {

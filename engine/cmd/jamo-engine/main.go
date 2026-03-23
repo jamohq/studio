@@ -134,10 +134,10 @@ func run(ctx context.Context, log *logger.Logger) error {
 		return fmt.Errorf("server error: %w", err)
 	}
 
-	// Graceful shutdown.
+	// Graceful shutdown: stop accepting new RPCs first, then clean up resources.
 	log.Info(ctx, "shutting down")
-	termBus.CloseAll()
 	srv.GracefulStop()
+	termBus.CloseAll()
 
 	return nil
 }

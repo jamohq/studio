@@ -8,29 +8,33 @@ import CanvasPanel from './canvas/CanvasPanel';
 import RichTextPanel from './richtext/RichTextPanel';
 import TerminalPanel from './components/TerminalPanel';
 import RunTerminalPanel from './components/RunTerminalPanel';
-import ChangesPanel from './components/ChangesPanel';
+import SourceControlPanel from './components/SourceControlPanel';
 import CodeEditorPanel from './codeeditor/CodeEditorPanel';
-import OnboardingOverlay from './components/OnboardingOverlay';
+import GuidedTour from './components/GuidedTour';
+import HintTooltip, { HINTS } from './components/HintTooltip';
 import SetupDialog from './components/SetupDialog';
 import { ToastProvider, useToast } from './components/Toast';
 import type { ActionStatus } from './hooks/useActionRunner';
 import type { EnvCheckResult } from '../shared/types';
-import { useChangeTracking } from './hooks/useChangeTracking';
+import { useSourceControl } from './hooks/useSourceControl';
 import { useWorkspace } from './hooks/useWorkspace';
 import { useTerminal } from './hooks/useTerminal';
 import { useActionRunner } from './hooks/useActionRunner';
 import { useRunTerminal } from './hooks/useRunTerminal';
 import { useResizable } from './hooks/useResizable';
 import { useActivityFeed } from './hooks/useActivityFeed';
+import { useGuidedTour } from './hooks/useGuidedTour';
 import ActivityPanel from './components/ActivityPanel';
+import ChatPanel from './components/ChatPanel';
 import { findSection } from './sections';
 import { Button } from './components/ui/button';
 import { cn } from '@/lib/utils';
+import { useChat } from './hooks/useChat';
 
 /** Auto-refresh interval (ms) for the design panel while the terminal is active. */
 const CREATOR_REFRESH_INTERVAL_MS = 3000;
 
-const ONBOARDING_KEY = 'jamo-has-seen-onboarding';
+// Legacy key kept for migration — see useGuidedTour.
 
 /** Fires a toast when an action completes or errors. Must be rendered inside ToastProvider. */
 function ActionToast({ status, label }: { status: ActionStatus; label: string }) {
@@ -93,12 +97,8 @@ export default function App() {
   const sidebar = useResizable({ defaultWidth: 240, minWidth: 160, maxWidth: 600, storageKey: 'jamo-sidebar-width' });
   const terminalResize = useResizable({ defaultWidth: 480, minWidth: 200, maxWidth: 900, storageKey: 'jamo-terminal-width' });
 
-  // -- Change tracking (replaces useSyncStatus) -------------------------------
-  const changeTracking = useChangeTracking(workspace.workspaceId);
-
-  const handleCommit = useCallback(() => {
-    changeTracking.resetAfterCommit();
-  }, [changeTracking.resetAfterCommit]);
+  // -- Source control -----------------------------------------------------------
+  const sourceControl = useSourceControl(workspace.workspaceId);
 
   // -- Terminal ---------------------------------------------------------------
   const terminal = useTerminal();
@@ -111,15 +111,29 @@ export default function App() {
     terminal.openTerminal,
   );
 
+  // -- Chat -------------------------------------------------------------------
+  const chat = useChat(workspace.workspaceId, workspace.openFile);
+  const [chatOpen, setChatOpen] = useState(false);
+
   // -- Activity feed -----------------------------------------------------------
   const activityFeed = useActivityFeed(workspace.workspaceId, actionStatus, actionLabel);
 
-  // Mark action ran when it completes successfully.
+  // Mark action ran when it completes successfully and refresh source control.
   useEffect(() => {
     if (actionStatus === 'done') {
-      changeTracking.markActionRan();
+      sourceControl.markActionRan();
+      const timer = setTimeout(sourceControl.refresh, 1500);
+      return () => clearTimeout(timer);
     }
-  }, [actionStatus, changeTracking.markActionRan]);
+  }, [actionStatus, sourceControl.markActionRan, sourceControl.refresh]);
+
+  // Refresh source control when chat completes (auto-commit may have fired).
+  useEffect(() => {
+    if (chat.status === 'done') {
+      const timer = setTimeout(sourceControl.refresh, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [chat.status, sourceControl.refresh]);
 
   // -- Run terminal -----------------------------------------------------------
   const run = useRunTerminal(terminal.terminalOpen, terminal.openTerminal);
@@ -138,15 +152,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [terminal.terminalSessionId, workspace.refreshCreator]);
 
-  // -- Onboarding -------------------------------------------------------------
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    return !localStorage.getItem(ONBOARDING_KEY);
-  });
-
-  const handleOnboardingComplete = useCallback(() => {
-    localStorage.setItem(ONBOARDING_KEY, '1');
-    setShowOnboarding(false);
-  }, []);
+  // -- Guided tour -------------------------------------------------------------
+  const tour = useGuidedTour({ setActivePanel });
 
   // -- Environment setup dialog ------------------------------------------------
   const [setupResult, setSetupResult] = useState<EnvCheckResult | null>(null);
@@ -205,10 +212,11 @@ export default function App() {
     );
   }
 
-  const showSidebar = activePanel && activePanel !== 'changes';
+  const showSidebar = activePanel && activePanel !== 'source-control';
   const showActivityPanel = activityFeed.visible;
   const showTerminalPanel = terminal.terminalMounted && terminal.terminalOpen && !showActivityPanel;
-  const showRightPanel = showActivityPanel || showTerminalPanel;
+  const showChatPanel = chatOpen && !showActivityPanel;
+  const showRightPanel = showActivityPanel || showTerminalPanel || showChatPanel;
 
   // -- Main layout ------------------------------------------------------------
   return (
@@ -219,6 +227,8 @@ export default function App() {
           <ActivityBar
             activePanel={activePanel}
             onPanelChange={(p) => setActivePanel(activePanel === p ? null : p)}
+            tourActive={tour.active}
+            onStartTour={tour.hasSeenTour ? tour.start : undefined}
           />
 
           {/* Content area */}
@@ -242,18 +252,27 @@ export default function App() {
               )}
 
               <div className="flex-1" />
-              <Button variant="ghost" size="sm" onClick={run.handleRun} title={run.runState === 'running' ? 'Rerun (make run)' : 'Run (make run)'} className="text-foreground-muted text-[11px] h-7">
-                {run.runState === 'running' ? '▶ Rerun' : '▶ Run'}
-              </Button>
+              <HintTooltip id={HINTS.runBtn.id} content={HINTS.runBtn.content} side={HINTS.runBtn.side} disabled={tour.active}>
+                <Button variant="ghost" size="sm" onClick={run.handleRun} title={run.runState === 'running' ? 'Rerun (make run)' : 'Run (make run)'} data-tour="run-btn" className="text-foreground-muted text-[11px] h-7">
+                  {run.runState === 'running' ? '▶ Rerun' : '▶ Run'}
+                </Button>
+              </HintTooltip>
               <Button variant="ghost" size="sm" onClick={run.handleStop} disabled={run.runState === 'idle'} title="Stop running process" className="text-foreground-muted text-[11px] h-7">
                 ■ Stop
               </Button>
               <Button variant="ghost" size="sm" onClick={() => workspace.openWorkspace()} title="Open Project" className="text-foreground-muted text-[11px] h-7">
                 Open Project
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { if (showActivityPanel) { activityFeed.dismiss(); terminal.openTerminal(); } else { terminal.toggleTerminal(); } }} title={terminal.terminalOpen ? 'Close terminal' : 'Open terminal'} className={cn('text-[11px] h-7', (terminal.terminalOpen || showActivityPanel) && 'text-accent')}>
-                Terminal
-              </Button>
+              <HintTooltip id={HINTS.chatBtn.id} content={HINTS.chatBtn.content} side={HINTS.chatBtn.side} disabled={tour.active}>
+                <Button variant="outline" size="sm" onClick={() => setChatOpen((prev) => !prev)} title={chatOpen ? 'Close chat' : 'Open chat'} data-tour="chat-btn" className={cn('text-[11px] h-7', chatOpen && 'text-accent')}>
+                  Chat
+                </Button>
+              </HintTooltip>
+              <HintTooltip id={HINTS.terminalBtn.id} content={HINTS.terminalBtn.content} side={HINTS.terminalBtn.side} disabled={tour.active}>
+                <Button variant="outline" size="sm" onClick={() => { if (showActivityPanel) { activityFeed.dismiss(); terminal.openTerminal(); } else { terminal.toggleTerminal(); } }} title={terminal.terminalOpen ? 'Close terminal' : 'Open terminal'} data-tour="terminal-btn" className={cn('text-[11px] h-7', (terminal.terminalOpen || showActivityPanel) && 'text-accent')}>
+                  Terminal
+                </Button>
+              </HintTooltip>
             </div>
 
             {/* Main content row: sidebar | resize | editor | resize | terminal */}
@@ -290,18 +309,35 @@ export default function App() {
                 </>
               )}
 
-              {/* Editor / Changes */}
+              {/* Editor / Source Control */}
               <div className="flex-1 overflow-hidden relative min-w-0">
-                {activePanel === 'changes' ? (
-                  <ChangesPanel
+                {activePanel === 'source-control' ? (
+                  <SourceControlPanel
                     workspaceId={workspace.workspaceId}
-                    files={changeTracking.files}
-                    isClean={changeTracking.isClean}
-                    loading={changeTracking.loading}
-                    derivedMode={changeTracking.derivedMode}
-                    actionRanSinceLastCommit={changeTracking.actionRanSinceLastCommit}
-                    onCommit={handleCommit}
-                    onRefresh={changeTracking.refresh}
+                    stagedFiles={sourceControl.stagedFiles}
+                    unstagedFiles={sourceControl.unstagedFiles}
+                    branch={sourceControl.branch}
+                    isClean={sourceControl.isClean}
+                    loading={sourceControl.loading}
+                    derivedMode={sourceControl.derivedMode}
+                    actionRanSinceLastCommit={sourceControl.actionRanSinceLastCommit}
+                    onStageFile={sourceControl.stageFile}
+                    onUnstageFile={sourceControl.unstageFile}
+                    onStageAll={sourceControl.stageAll}
+                    onUnstageAll={sourceControl.unstageAll}
+                    onRevertFile={sourceControl.revertFile}
+                    onCommit={sourceControl.commit}
+                    onRefresh={sourceControl.refresh}
+                    entries={sourceControl.entries}
+                    historyLoading={sourceControl.historyLoading}
+                    filter={sourceControl.filter}
+                    onFilterChange={sourceControl.setFilter}
+                    expandedHash={sourceControl.expandedHash}
+                    expandedFiles={sourceControl.expandedFiles}
+                    expandedDiff={sourceControl.expandedDiff}
+                    onToggleExpand={sourceControl.toggleExpand}
+                    onRestore={sourceControl.restore}
+                    onFileClick={workspace.handleOpenFile}
                   />
                 ) : workspace.openFile ? (
                   findSection(workspace.openFile)?.editorType === 'richtext' ? (
@@ -346,8 +382,26 @@ export default function App() {
                         onDismiss={activityFeed.dismiss}
                       />
                     )}
+                    {showChatPanel && (
+                      <ChatPanel
+                        workspaceId={workspace.workspaceId}
+                        messages={chat.messages}
+                        status={chat.status}
+                        errorMessage={chat.errorMessage}
+                        fileChanges={chat.fileChanges}
+                        currentActivity={chat.currentActivity}
+                        elapsedSeconds={chat.elapsedSeconds}
+                        onSend={chat.sendMessage}
+                        onCancel={chat.cancelRun}
+                        onClear={chat.clearChat}
+                        onClose={() => setChatOpen(false)}
+                        onFileClick={workspace.handleOpenFile}
+                        onSaveLog={chat.saveLog}
+                        openFile={workspace.openFile}
+                      />
+                    )}
                     {terminal.terminalMounted && (
-                      <div className={cn('flex-1 flex flex-col overflow-hidden', showActivityPanel && 'hidden')}>
+                      <div className={cn('flex-1 flex flex-col overflow-hidden', (showActivityPanel || showChatPanel) && 'hidden')}>
                         {/* Tab bar */}
                         <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
                           <button
@@ -428,8 +482,16 @@ export default function App() {
           />
         )}
 
-        {/* First-run onboarding */}
-        {showOnboarding && <OnboardingOverlay onComplete={handleOnboardingComplete} />}
+        {/* Guided tour (first-run walkthrough) */}
+        <GuidedTour
+          active={tour.active}
+          step={tour.currentStep}
+          stepIndex={tour.stepIndex}
+          totalSteps={tour.totalSteps}
+          onNext={tour.next}
+          onBack={tour.back}
+          onSkip={tour.skip}
+        />
       </ToastProvider>
     </ThemeContext.Provider>
   );
