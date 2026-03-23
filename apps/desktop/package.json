@@ -1,7 +1,11 @@
 {
   "name": "jamo-desktop",
   "productName": "Jamo Studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "description": "Design, code, and ship — all in one local-first desktop app.",
+  "homepage": "https://github.com/jamohq/studio",
+  "author": "jamohq",
+  "license": "AGPL-3.0",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
