@@ -128,11 +128,21 @@ export interface Run {
   completedAt: string | null;
 }
 
+export interface TaskItem {
+  id: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'deleted';
+  priority?: string;
+}
+
 export interface ChatStreamChunk {
   runId: string;
   delta?: string;
   fileChange?: string;
   toolUse?: { name: string; input: string };
+  tasks?: TaskItem[];
+  taskCreate?: { subject: string; status: string; description?: string };
+  taskUpdate?: { taskId: string; status?: string; subject?: string };
   sessionId?: string;
   status?: 'completed' | 'error' | 'cancelled';
   error?: string;

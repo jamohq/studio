@@ -557,7 +557,7 @@ export default function ExplorerPanel({ workspaceId, onOpenFile, onFileDeleted, 
       {/* Header */}
       <div className="px-3 py-2.5 text-[11px] font-semibold uppercase text-foreground-muted flex items-center justify-between">
         <span>
-          Files
+          Explorer
           {hasSelection && (
             <span className="ml-1 normal-case font-normal text-foreground-dim">
               ({selected.size} selected)

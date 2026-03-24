@@ -1,134 +1,139 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { EnvCheckResult } from '../../shared/types';
+import type { EnvCheckResult, ChatStreamChunk, TaskItem } from '../../shared/types';
 
-/** UTF-8 safe base64 encode (btoa only handles Latin1). */
-function toBase64(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+export type ActionStatus = 'idle' | 'running' | 'done' | 'error';
+
+export interface ActionActivity {
+  toolName: string;
+  description: string;
+}
+
+function describeToolUse(name: string, input: string): string {
+  try {
+    const parsed = typeof input === 'string' ? JSON.parse(input) : input;
+    switch (name) {
+      case 'Read': return `Reading ${parsed.file_path?.split('/').pop() || 'file'}`;
+      case 'Edit': return `Editing ${parsed.file_path?.split('/').pop() || 'file'}`;
+      case 'Write': return `Writing ${parsed.file_path?.split('/').pop() || 'file'}`;
+      case 'Grep': return `Searching for "${parsed.pattern?.slice(0, 30) || '...'}"`;
+      case 'Glob': return `Finding files matching ${parsed.pattern?.slice(0, 30) || '...'}`;
+      case 'Bash': return `Running command`;
+      case 'Agent': return `Running sub-agent`;
+      default: return `Using ${name}`;
+    }
+  } catch {
+    return `Using ${name}`;
   }
-  return btoa(binary);
 }
-
-function sendShellCommand(sessionId: string, cmd: string): void {
-  window.jamo.sendTerminalInput(sessionId, toBase64(cmd + '\r'));
-}
-
-/** Polling interval (ms) for checking action completion via exit-status file. */
-const ACTION_POLL_MS = 2000;
-
-/** Delay (ms) before sending command to a newly-ready terminal session. */
-const TERMINAL_INIT_DELAY_MS = 500;
-
-/** Delay (ms) between Ctrl+C and sending the next command. */
-const CTRL_C_DELAY_MS = 200;
 
 /** Duration (ms) to show the completion status before resetting to idle. */
 const STATUS_RESET_DELAY_MS = 6000;
 
-/** The shell command to execute the wrapper script and capture exit status. */
-const CLAUDE_CMD =
-  'rm -f .jamo/.exit_status .jamo/.output; bash .jamo/.run.sh; printf "%d\\n" "$?" > .jamo/.exit_status';
-
-/** Content of the wrapper script written before launching the action.
- *  Uses -p (print mode) so claude exits after completing instead of waiting for input.
- *  Pipes through tee to capture output; pipefail ensures claude's exit code is preserved.
- *  Note: $(cat ...) in double quotes is safe — the shell does not re-evaluate the output
- *  of command substitution, so prompt content cannot cause injection. */
-const RUN_SCRIPT =
-  '#!/bin/bash\nset -o pipefail\nclaude -p --dangerously-skip-permissions --append-system-prompt "$(cat .jamo/.prompt)" "Begin." | tee .jamo/.output\n';
-
-export type ActionStatus = 'idle' | 'running' | 'done' | 'error';
-
-export function useActionRunner(
-  workspaceId: string | null,
-  terminalSessionId: string | null,
-  terminalOpen: boolean,
-  openTerminal: (tab?: 'claude' | 'run') => void,
-) {
+export function useActionRunner(workspaceId: string | null) {
   const [actionStatus, setActionStatus] = useState<ActionStatus>('idle');
   const [actionLabel, setActionLabel] = useState('');
-  const pendingActionRef = useRef<string | null>(null);
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null);
+  const [currentActivity, setCurrentActivity] = useState<ActionActivity | null>(null);
+  const [activityLog, setActivityLog] = useState<ActionActivity[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [fileChanges, setFileChanges] = useState<string[]>([]);
 
-  const sendActionToTerminal = useCallback(async (prompt: string, label: string): Promise<EnvCheckResult | null> => {
+  // Listen to stream events for the current action run.
+  useEffect(() => {
+    const unsub = window.jamo.onChatStream((chunk: ChatStreamChunk) => {
+      if (!currentRunId || chunk.runId !== currentRunId) return;
+
+      if (chunk.toolUse) {
+        const activity: ActionActivity = {
+          toolName: chunk.toolUse.name,
+          description: describeToolUse(chunk.toolUse.name, chunk.toolUse.input),
+        };
+        setCurrentActivity(activity);
+        setActivityLog((prev) => [...prev, activity]);
+      }
+
+      if (chunk.tasks) {
+        setTasks(chunk.tasks);
+      }
+      if (chunk.taskCreate) {
+        setTasks((prev) => [...prev, {
+          id: `task_${Date.now()}`,
+          content: chunk.taskCreate!.subject,
+          status: (chunk.taskCreate!.status as TaskItem['status']) || 'pending',
+        }]);
+      }
+      if (chunk.taskUpdate) {
+        setTasks((prev) => prev.map((t) =>
+          t.id === chunk.taskUpdate!.taskId
+            ? { ...t, status: (chunk.taskUpdate!.status as TaskItem['status']) || t.status, content: chunk.taskUpdate!.subject || t.content }
+            : t
+        ));
+      }
+
+      if (chunk.fileChange) {
+        // File paths from Claude's Edit/Write tools are absolute — store as-is,
+        // deduplication handles both forms.
+        setFileChanges((prev) =>
+          prev.includes(chunk.fileChange!) ? prev : [...prev, chunk.fileChange!],
+        );
+      }
+
+      if (chunk.status === 'completed') {
+        setActionStatus('done');
+        setCurrentActivity(null);
+        setTimeout(
+          () => setActionStatus((s) => (s === 'done' ? 'idle' : s)),
+          STATUS_RESET_DELAY_MS,
+        );
+      } else if (chunk.status === 'error') {
+        setActionStatus('error');
+        setCurrentActivity(null);
+        setTimeout(
+          () => setActionStatus((s) => (s === 'error' ? 'idle' : s)),
+          STATUS_RESET_DELAY_MS,
+        );
+      }
+    });
+
+    return unsub;
+  }, [currentRunId]);
+
+  const sendAction = useCallback(async (prompt: string, label: string): Promise<EnvCheckResult | null> => {
     if (!workspaceId) return null;
 
     // Gate on environment check before dispatching.
     const envResult = await window.jamo.checkEnvironment();
     if (!envResult.ready) return envResult;
 
-    // Write prompt and wrapper script to hidden files.
-    await window.jamo.writeFile(workspaceId, '.jamo/.prompt', prompt);
-    await window.jamo.writeFile(workspaceId, '.jamo/.run.sh', RUN_SCRIPT);
-    try { await window.jamo.deleteFile(workspaceId, '.jamo/.exit_status'); } catch { /* ignore */ }
-
     setActionStatus('running');
     setActionLabel(label);
+    setCurrentActivity(null);
+    setActivityLog([]);
+    setTasks([]);
+    setFileChanges([]);
 
-    if (!terminalOpen) {
-      pendingActionRef.current = CLAUDE_CMD;
-      openTerminal('claude');
-    } else if (terminalSessionId) {
-      window.jamo.sendTerminalInput(terminalSessionId, toBase64('\x03'));
-      setTimeout(() => sendShellCommand(terminalSessionId, CLAUDE_CMD), CTRL_C_DELAY_MS);
-    } else {
-      pendingActionRef.current = CLAUDE_CMD;
+    try {
+      const result = await window.jamo.chatSend(workspaceId, prompt, {}, undefined);
+      setCurrentRunId(result.runId);
+    } catch (err: any) {
+      console.error('[ActionRunner] Failed to start:', err);
+      setActionStatus('error');
+      setActionLabel('');
     }
 
     return null;
-  }, [terminalOpen, terminalSessionId, workspaceId, openTerminal]);
+  }, [workspaceId]);
 
-  // Send pending action when terminal session becomes ready.
-  useEffect(() => {
-    if (terminalSessionId && pendingActionRef.current) {
-      const cmd = pendingActionRef.current;
-      pendingActionRef.current = null;
-      const timer = setTimeout(() => sendShellCommand(terminalSessionId, cmd), TERMINAL_INIT_DELAY_MS);
-      return () => clearTimeout(timer);
+  const cancelAction = useCallback(() => {
+    if (actionStatus !== 'running') return;
+    if (currentRunId) {
+      window.jamo.chatCancel(currentRunId);
     }
-  }, [terminalSessionId]);
+    setActionStatus('idle');
+    setActionLabel('');
+    setCurrentActivity(null);
+    setCurrentRunId(null);
+  }, [actionStatus, currentRunId]);
 
-  // Poll exit status.
-  useEffect(() => {
-    if (actionStatus !== 'running' || !workspaceId) return;
-
-    const interval = setInterval(async () => {
-      try {
-        // List .jamo/ first to check if .exit_status exists, avoiding noisy
-        // gRPC NotFound errors that Electron logs for rejected ipcMain handles.
-        const dir = await window.jamo.listDirectory(workspaceId, '.jamo');
-        if (!dir.entries.some((e) => e.name === '.exit_status')) return;
-
-        const res = await window.jamo.readFile(workspaceId, '.jamo/.exit_status');
-        // Extract first sequence of digits from the file (handles trailing newlines, whitespace, escape chars).
-        const match = res.content.match(/(\d+)/);
-        if (match) {
-          const code = parseInt(match[1], 10);
-          const newStatus = code === 0 ? 'done' : 'error';
-          setActionStatus(newStatus);
-
-          // Auto-commit on successful completion (tag auto-classified by smart-commit)
-          if (newStatus === 'done') {
-            window.jamo.smartCommit(workspaceId, {
-              tag: 'auto-code',
-              description: actionLabel || 'Terminal action',
-              source: 'action',
-            }).catch((err: any) => console.error('[ActionRunner] Auto-commit failed:', err));
-          }
-
-          setTimeout(
-            () => setActionStatus((s) => (s === 'done' || s === 'error' ? 'idle' : s)),
-            STATUS_RESET_DELAY_MS,
-          );
-        }
-      } catch {
-        // Directory or file not readable — action still running.
-      }
-    }, ACTION_POLL_MS);
-
-    return () => clearInterval(interval);
-  }, [actionStatus, workspaceId, actionLabel]);
-
-  return { actionStatus, actionLabel, sendActionToTerminal };
+  return { actionStatus, actionLabel, currentActivity, activityLog, tasks, fileChanges, sendAction, cancelAction };
 }
