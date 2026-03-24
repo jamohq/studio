@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { ActivityEntry, ActivityPhase } from '../hooks/useActivityFeed';
+import type { ActionActivity } from '../hooks/useActionRunner';
+import type { TaskItem } from '../../shared/types';
+import TaskList from './TaskList';
 
 const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   modified: { label: 'M', className: 'bg-yellow-500/20 text-yellow-400' },
@@ -10,72 +13,95 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   renamed: { label: 'R', className: 'bg-purple-500/20 text-purple-400' },
 };
 
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
+
 interface ActivityPanelProps {
   entries: ActivityEntry[];
   phase: ActivityPhase;
   summaryMessage: string;
+  elapsedSeconds: number;
   actionLabel: string;
+  activityLog: ActionActivity[];
+  tasks: TaskItem[];
   onFileClick: (path: string) => void;
   onDismiss: () => void;
+  onCancel: () => void;
 }
 
 export default function ActivityPanel({
   entries,
   phase,
   summaryMessage,
+  elapsedSeconds,
   actionLabel,
+  activityLog,
+  tasks,
   onFileClick,
   onDismiss,
+  onCancel,
 }: ActivityPanelProps) {
-  const listRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const isRunning = phase === 'analyzing' || phase === 'active';
 
-  // Auto-scroll to bottom when new entries arrive.
+  // Auto-scroll the log when new steps arrive.
   useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
     }
-  }, [entries.length]);
+  }, [activityLog.length, entries.length]);
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header bar */}
-      <div className="px-2 py-1 border-b border-l flex items-center gap-1 shrink-0">
-        <span className="px-2 py-0.5 text-[11px] font-semibold uppercase text-foreground">
-          Activity
-        </span>
-        {actionLabel && (
-          <span className="text-[11px] text-foreground-dim truncate">
-            {actionLabel}
-          </span>
-        )}
-        <div className="flex-1" />
-        <button
-          onClick={onDismiss}
-          title="Dismiss"
-          className="h-6 w-6 flex items-center justify-center text-foreground-muted hover:text-foreground"
-        >
-          <span className="text-sm leading-none">&times;</span>
-        </button>
-      </div>
-
-      {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        {phase === 'analyzing' && entries.length === 0 && (
-          <div className="flex-1 flex items-center justify-center">
-            <span className="flex items-center gap-2 text-[13px] text-foreground-muted">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent" />
-              </span>
-              Analyzing...
-            </span>
-          </div>
-        )}
+        <div ref={logRef} className="flex-1 overflow-auto px-1 py-1">
+          {/* Stacking activity log */}
+          {activityLog.length > 0 && (
+            <div className="space-y-0.5 py-1">
+              {activityLog.map((step, j) => {
+                const isActive = isRunning && j === activityLog.length - 1;
+                return (
+                  <div key={j} className="flex items-center gap-2 px-2 py-0.5 text-[11px] text-foreground-dim">
+                    {isActive ? (
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse shrink-0" />
+                    ) : (
+                      <span className="inline-block h-1.5 w-1.5 rounded-full border border-foreground-dim/30 shrink-0" />
+                    )}
+                    <span className={cn('truncate', isActive ? 'text-foreground-muted' : 'text-foreground-dim/60')}>
+                      {step.description}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-        {(phase === 'active' || phase === 'done' || phase === 'error' || (phase === 'analyzing' && entries.length > 0)) && (
-          <>
-            {/* File list */}
-            <div ref={listRef} className="flex-1 overflow-auto px-1 py-1">
+          {/* Empty state — no log entries yet */}
+          {activityLog.length === 0 && phase === 'analyzing' && (
+            <div className="flex flex-col items-center justify-center h-full gap-2">
+              <span className="text-[13px] text-foreground-muted">
+                {actionLabel ? `${actionLabel}...` : 'Working...'}
+              </span>
+              <span className="text-[11px] text-foreground-dim">
+                {formatElapsed(elapsedSeconds)}
+              </span>
+            </div>
+          )}
+
+          {/* Tasks */}
+          {tasks.length > 0 && (
+            <div className="px-2 py-1">
+              <TaskList tasks={tasks} />
+            </div>
+          )}
+
+          {/* File changes */}
+          {entries.length > 0 && (
+            <div className="border-t mt-1 pt-1">
               {entries.map((entry) => {
                 const badge = STATUS_BADGE[entry.status] || STATUS_BADGE.modified;
                 return (
@@ -92,26 +118,29 @@ export default function ActivityPanel({
                 );
               })}
             </div>
+          )}
+        </div>
 
-            {/* Completion section */}
-            {(phase === 'done' || phase === 'error') && (
-              <div className="shrink-0 border-t px-3 py-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className={cn(
-                    'text-[11px] font-semibold',
-                    phase === 'done' ? 'text-green-400' : 'text-red-400',
-                  )}>
-                    {phase === 'done' ? 'Completed' : 'Error'}
-                  </span>
-                </div>
-                {summaryMessage && (
-                  <pre className="text-[11px] text-foreground-dim font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-auto">
-                    {summaryMessage}
-                  </pre>
-                )}
-              </div>
+        {/* Completion section */}
+        {(phase === 'done' || phase === 'error') && (
+          <div className="shrink-0 border-t px-3 py-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className={cn(
+                'text-[11px] font-semibold',
+                phase === 'done' ? 'text-green-400' : 'text-red-400',
+              )}>
+                {phase === 'done' ? 'Completed' : 'Error'}
+              </span>
+              <span className="text-[10px] text-foreground-dim">
+                {formatElapsed(elapsedSeconds)}
+              </span>
+            </div>
+            {summaryMessage && (
+              <pre className="text-[11px] text-foreground-dim font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-auto">
+                {summaryMessage}
+              </pre>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

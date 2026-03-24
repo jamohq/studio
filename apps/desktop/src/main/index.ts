@@ -152,7 +152,7 @@ async function createWindow() {
 
   // Load the UI immediately so the user sees something.
   if (!app.isPackaged) {
-    await mainWindow.loadURL('http://localhost:5173');
+    await mainWindow.loadURL('http://localhost:5177');
     mainWindow.webContents.openDevTools();
   } else {
     await mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));

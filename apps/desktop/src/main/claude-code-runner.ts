@@ -78,7 +78,7 @@ export function runClaude(opts: ClaudeRunOptions): ClaudeRunResult {
       if (!line.trim()) continue;
       try {
         const msg = JSON.parse(line);
-        handleStreamMessage(emitter, msg, (sid) => { sessionId = sid; });
+        handleStreamMessage(emitter, msg, (sid) => { sessionId = sid; }, opts.cwd);
       } catch {
         // Not JSON — ignore
       }
@@ -95,7 +95,7 @@ export function runClaude(opts: ClaudeRunOptions): ClaudeRunResult {
     if (buffer.trim()) {
       try {
         const msg = JSON.parse(buffer);
-        handleStreamMessage(emitter, msg, (sid) => { sessionId = sid; });
+        handleStreamMessage(emitter, msg, (sid) => { sessionId = sid; }, opts.cwd);
       } catch { /* ignore */ }
     }
 
@@ -125,6 +125,7 @@ function handleStreamMessage(
   emitter: EventEmitter,
   msg: any,
   setSessionId: (sid: string) => void,
+  cwd: string,
 ): void {
   // Claude stream-json format has different message types
   // See: https://docs.anthropic.com/en/docs/claude-code/sdk
@@ -145,9 +146,34 @@ function handleStreamMessage(
               name: block.name,
               input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input),
             });
+            // Detect task updates from TodoWrite/TaskCreate/TaskUpdate
+            if (block.name === 'TodoWrite' && block.input?.todos) {
+              emitter.emit('tasks', block.input.todos);
+            }
+            if (block.name === 'TaskCreate' && block.input?.subject) {
+              emitter.emit('task_create', {
+                subject: block.input.subject,
+                status: 'pending',
+                description: block.input.description,
+              });
+            }
+            if (block.name === 'TaskUpdate' && block.input) {
+              emitter.emit('task_update', {
+                taskId: block.input.taskId,
+                status: block.input.status,
+                subject: block.input.subject,
+              });
+            }
+
             // Detect file changes from Edit/Write tool calls
             if ((block.name === 'Edit' || block.name === 'Write') && block.input?.file_path) {
-              emitter.emit('file_change', block.input.file_path);
+              let filePath: string = block.input.file_path;
+              // Convert absolute paths to relative (strip cwd prefix)
+              const prefix = cwd.endsWith('/') ? cwd : cwd + '/';
+              if (filePath.startsWith(prefix)) {
+                filePath = filePath.slice(prefix.length);
+              }
+              emitter.emit('file_change', filePath);
             }
           }
         }

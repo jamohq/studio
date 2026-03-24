@@ -20,3 +20,11 @@ Thumbs.db
 # Env
 .env
 .env.local
+.jamo/sync-status.json
+
+# Jamo Studio infra (auto-added)
+.jamo/runs/
+.jamo/.prompt
+.jamo/.run.sh
+.jamo/.exit_status
+.jamo/.output

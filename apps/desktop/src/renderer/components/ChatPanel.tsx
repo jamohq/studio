@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
-import type { ChatMessage } from '../../shared/types';
+import type { ChatMessage, TaskItem } from '../../shared/types';
 import type { ChatStatus, ChatActivity } from '../hooks/useChat';
+import TaskList from './TaskList';
 import ChatInput from './ChatInput';
 import { useToast } from './Toast';
 
@@ -21,6 +22,8 @@ interface ChatPanelProps {
   errorMessage: string | null;
   fileChanges: string[];
   currentActivity: ChatActivity | null;
+  activityLog: ChatActivity[];
+  tasks: TaskItem[];
   elapsedSeconds: number;
   onSend: (message: string) => void;
   onCancel: () => void;
@@ -78,6 +81,8 @@ export default function ChatPanel({
   errorMessage,
   fileChanges,
   currentActivity,
+  activityLog,
+  tasks,
   elapsedSeconds,
   onSend,
   onCancel,
@@ -110,7 +115,7 @@ export default function ChatPanel({
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [messages.length, messages[messages.length - 1]?.content.length, currentActivity]);
+  }, [messages.length, messages[messages.length - 1]?.content.length, activityLog.length]);
 
   return (
     <div className="flex flex-col h-full">
@@ -184,16 +189,61 @@ export default function ChatPanel({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+        {messages.map((msg, i) => {
+          // Show the activity log before the last assistant message (or at the end while running)
+          const isLastAssistant = msg.role === 'assistant' && (i === messages.length - 1 || !messages.slice(i + 1).some((m) => m.role === 'assistant'));
+          const showLogHere = isLastAssistant && activityLog.length > 0;
 
-        {/* Activity indicator */}
-        {status === 'running' && currentActivity && (
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-accent/5 border border-accent/10 text-[11px] text-foreground-dim">
-            <span className="inline-block h-1 w-1 rounded-full bg-accent animate-pulse shrink-0" />
-            <span className="truncate">{currentActivity.description}</span>
+          return (
+            <React.Fragment key={msg.id}>
+              {showLogHere && (
+                <div className="space-y-0.5 py-1">
+                  {activityLog.map((step, j) => {
+                    const isActive = status === 'running' && j === activityLog.length - 1;
+                    return (
+                      <div key={j} className="flex items-center gap-2 px-2 py-0.5 text-[11px] text-foreground-dim">
+                        {isActive ? (
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse shrink-0" />
+                        ) : (
+                          <span className="inline-block h-1.5 w-1.5 rounded-full border border-foreground-dim/30 shrink-0" />
+                        )}
+                        <span className={cn('truncate', isActive ? 'text-foreground-muted' : 'text-foreground-dim/60')}>
+                          {step.description}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <MessageBubble message={msg} />
+            </React.Fragment>
+          );
+        })}
+
+        {/* Activity log when no assistant message yet (still waiting for first response) */}
+        {status === 'running' && activityLog.length > 0 && !messages.some((m) => m.role === 'assistant' && m.runId) && (
+          <div className="space-y-0.5 py-1">
+            {activityLog.map((step, j) => {
+              const isActive = j === activityLog.length - 1;
+              return (
+                <div key={j} className="flex items-center gap-2 px-2 py-0.5 text-[11px] text-foreground-dim">
+                  {isActive ? (
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse shrink-0" />
+                  ) : (
+                    <span className="inline-block h-1.5 w-1.5 rounded-full border border-foreground-dim/30 shrink-0" />
+                  )}
+                  <span className={cn('truncate', isActive ? 'text-foreground-muted' : 'text-foreground-dim/60')}>
+                    {step.description}
+                  </span>
+                </div>
+              );
+            })}
           </div>
+        )}
+
+        {/* Tasks */}
+        {tasks.length > 0 && (
+          <TaskList tasks={tasks} />
         )}
 
         {/* File changes */}

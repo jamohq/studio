@@ -71,6 +71,7 @@ export default function WelcomePage({ onOpenFolder, onCreateEmpty, onCreateSampl
       <div className="text-center mb-4 flex flex-col items-center">
         <img src={iconPng} alt="Jamo" className="w-16 h-16 mb-2" />
         <div className="text-[22px] font-semibold text-foreground mt-1">Jamo Studio</div>
+        <div className="text-[16px] text-foreground-muted mt-1">Design, Code, and Ship</div>
       </div>
 
       {/* Primary actions */}
@@ -89,7 +90,7 @@ export default function WelcomePage({ onOpenFolder, onCreateEmpty, onCreateSampl
       {/* Recent workspaces */}
       {recentWorkspaces.length > 0 && (
         <div className="w-full max-w-[400px] mt-4">
-          <div className="text-[13px] font-semibold text-foreground-muted mb-3">Recent Projects</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-foreground-muted mb-3">Recent Projects</div>
           <div className="flex flex-col gap-1">
             {recentWorkspaces.map((ws) => {
               const parts = ws.path.split('/');
