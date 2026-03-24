@@ -745,6 +745,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow) {
       sendChunk({ runId: run.id, toolUse: tool });
     });
 
+    claudeRun.emitter.on('tasks', (todos: any[]) => {
+      sendChunk({ runId: run.id, tasks: todos });
+    });
+
+    claudeRun.emitter.on('task_create', (task: any) => {
+      sendChunk({ runId: run.id, taskCreate: task });
+    });
+
+    claudeRun.emitter.on('task_update', (update: any) => {
+      sendChunk({ runId: run.id, taskUpdate: update });
+    });
+
     claudeRun.emitter.on('file_change', (filePath: string) => {
       if (!filesChanged.includes(filePath)) {
         filesChanged.push(filePath);

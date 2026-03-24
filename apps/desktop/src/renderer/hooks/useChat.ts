@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ChatMessage, ChatStreamChunk, ChatContext } from '../../shared/types';
+import type { ChatMessage, ChatStreamChunk, ChatContext, TaskItem } from '../../shared/types';
 import { buildChatContext } from '../chat-context';
 
 export type ChatStatus = 'idle' | 'running' | 'done' | 'error';
@@ -36,6 +36,8 @@ export function useChat(workspaceId: string | null, openFile: string | null) {
   const [fileChanges, setFileChanges] = useState<string[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentActivity, setCurrentActivity] = useState<ChatActivity | null>(null);
+  const [activityLog, setActivityLog] = useState<ChatActivity[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const messagesRef = useRef<ChatMessage[]>([]);
   const startTimeRef = useRef<number | null>(null);
@@ -75,11 +77,36 @@ export function useChat(workspaceId: string | null, openFile: string | null) {
   useEffect(() => {
     const unsub = window.jamo.onChatStream((chunk: ChatStreamChunk) => {
       if (chunk.toolUse) {
-        setCurrentActivity({
+        const activity: ChatActivity = {
           toolName: chunk.toolUse.name,
           description: describeToolUse(chunk.toolUse.name, chunk.toolUse.input),
           timestamp: Date.now(),
-        });
+        };
+        setCurrentActivity(activity);
+        setActivityLog((prev) => [...prev, activity]);
+      }
+
+      // TodoWrite — full task list replacement
+      if (chunk.tasks) {
+        setTasks(chunk.tasks);
+      }
+
+      // TaskCreate — append a new task
+      if (chunk.taskCreate) {
+        setTasks((prev) => [...prev, {
+          id: `task_${Date.now()}`,
+          content: chunk.taskCreate!.subject,
+          status: (chunk.taskCreate!.status as TaskItem['status']) || 'pending',
+        }]);
+      }
+
+      // TaskUpdate — update an existing task's status
+      if (chunk.taskUpdate) {
+        setTasks((prev) => prev.map((t) =>
+          t.id === chunk.taskUpdate!.taskId
+            ? { ...t, status: (chunk.taskUpdate!.status as TaskItem['status']) || t.status, content: chunk.taskUpdate!.subject || t.content }
+            : t
+        ));
       }
 
       if (chunk.delta) {
@@ -138,6 +165,8 @@ export function useChat(workspaceId: string | null, openFile: string | null) {
       setStatus('running');
       setFileChanges([]);
       setErrorMessage(null);
+      setActivityLog([]);
+      setTasks([]);
 
       const userMsg: ChatMessage = {
         id: `msg_${Date.now()}`,
@@ -181,6 +210,8 @@ export function useChat(workspaceId: string | null, openFile: string | null) {
     setStatus('idle');
     setErrorMessage(null);
     setCurrentActivity(null);
+    setActivityLog([]);
+    setTasks([]);
     setElapsedSeconds(0);
   }, []);
 
@@ -226,6 +257,8 @@ export function useChat(workspaceId: string | null, openFile: string | null) {
     currentRunId,
     fileChanges,
     currentActivity,
+    activityLog,
+    tasks,
     elapsedSeconds,
     sendMessage,
     cancelRun,

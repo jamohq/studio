@@ -29,7 +29,7 @@ export function createSettingsWindow(): void {
   });
 
   if (!app.isPackaged) {
-    settingsWindow.loadURL('http://localhost:5173/settings.html');
+    settingsWindow.loadURL('http://localhost:5177/settings.html');
   } else {
     settingsWindow.loadFile(path.join(__dirname, '..', 'renderer', 'settings.html'));
   }
